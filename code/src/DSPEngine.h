@@ -284,7 +284,8 @@ namespace daisy
         {
             for (size_t i = 0; i < size; i++)
             {
-                float sig = dcblock_mic_in_.Process(in[0][i] * ingain_ * kMicGain
+                const float m = mic_d_ ? mic_d_[i] : in[0][i]; // SING: pre-delayed
+                float sig = dcblock_mic_in_.Process(m * ingain_ * kMicGain
                                                     * (duck_ ? duck_[i] : 1.f));
                 sig = mic_filter_.Process(sig);
 
@@ -344,6 +345,19 @@ namespace daisy
             harmonizer.Duck(duck, size);
             duck_ = duck;
 
+            /* SING: the built-in mic, kMicPreDelay late, for the harmonies and
+               the dry voice: the duck starts on a button's first contact,
+               about a block after its click does, so this lets it cover the
+               click from its first sample (after ugrossek's sing-pitch SING) */
+            float mic_d[size];
+            for(size_t i = 0; i < size; i++)
+            {
+                mic_delay_[mic_delay_w_] = in[0][i];
+                mic_d[i] = mic_delay_[(mic_delay_w_ - kMicPreDelay) & (kMicDelayLen - 1)];
+                mic_delay_w_ = (mic_delay_w_ + 1) & (kMicDelayLen - 1);
+            }
+            mic_d_ = mic_d;
+
             /* SING: dry/wet (knob 6, page 2), smoothed per sample: the dry
                gain goes to the voice monitor below, the wet to the harmonies */
             float dry[size], wet[size];
@@ -371,7 +385,7 @@ namespace daisy
                     if(resample)
                         live[i] = i < kLoopBufLen ? loop_buf_[i] * ingain_ * kLoopGain : 0.f;
                     else
-                        live[i] = mic ? in[0][i] * ingain_ * kMicGain * duck[i]
+                        live[i] = mic ? mic_d[i] * ingain_ * kMicGain * duck[i]
                                       : (in[2][i] + in[3][i]) * .5f * ingain_ * kLineInGain;
                 }
                 harmonizer.Process(live, mic, out[0], out[1], size);
@@ -522,6 +536,7 @@ namespace daisy
             }
 
             duck_    = nullptr; // it pointed into this block's stack
+            mic_d_   = nullptr; // so did this
             dry_buf_ = nullptr; // so did this
         }
 
@@ -569,6 +584,8 @@ namespace daisy
         /* SING: knobs 1-3 drive the harmonizer */
         void SetStack(float val) { harmonizer.SetStack(val); }
         void SetStrum(float val) { harmonizer.SetStrum(val); }
+        /* SING: a button contact changed (raw, before debouncing) */
+        void KeyContact() { harmonizer.KeyContact(); }
         void SetGlide(float val) { harmonizer.SetGlide(val); }
         void SetFreeze(float val) { harmonizer.SetFreeze(val); }
         void ToggleFreezeOn() { harmonizer.SetFreezeOn(!harmonizer.FreezeOn()); }
@@ -833,6 +850,13 @@ namespace daisy
         /** FX */
         MicFilter mic_filter_;
         const float *duck_ = nullptr; // SING: this block's mic ducking
+
+        /* SING: the built-in mic, kMicPreDelay samples late */
+        static constexpr int kMicDelayLen = 256;  // power of two
+        static constexpr int kMicPreDelay = 96;   // 2 ms
+        float        mic_delay_[kMicDelayLen] = {};
+        int          mic_delay_w_ = 0;
+        const float *mic_d_ = nullptr;           // this block's delayed mic
         DjFilter filter_;
         daisysp::Reverb* reverb_;
         chompi::InterpolatedDelayLine del_;

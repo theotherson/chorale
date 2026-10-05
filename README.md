@@ -113,8 +113,10 @@ resample mode.
 - **Use headphones.** The built-in mic and speaker feed back.
 - Both thresholds are measured after the input gain: change the gain and you may need to reset
   them.
-- With the built-in mic, CHORALE dips the mic for 35 ms after every key change, which reduces
-  the key clicks but doesn't remove them. A mic on the input jack avoids them entirely.
+- With the built-in mic, CHORALE dips the mic for 35 ms from the first contact of any button
+  (keys, record, play, knob presses), and hears the mic 2 ms late so the dip covers the click
+  from its start. That reduces the clicks but doesn't remove them; a mic on the input jack
+  avoids them entirely.
 
 ## Install
 
