@@ -155,6 +155,23 @@ namespace chompi
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
 
+    /** CHORALE: knob 1 ring in chord mode, one hue per chord type */
+    static inline void ChordColour(int idx, float &r, float &g, float &b)
+    {
+        const float h = float(idx) / float(kNumChords) * 6.f; // around the wheel
+        const int   k = int(h);
+        const float f = h - float(k);
+        switch(k % 6)
+        {
+            case 0:  r = 1.f;     g = f;       b = 0.f;     break;
+            case 1:  r = 1.f - f; g = 1.f;     b = 0.f;     break;
+            case 2:  r = 0.f;     g = 1.f;     b = f;       break;
+            case 3:  r = 0.f;     g = 1.f - f; b = 1.f;     break;
+            case 4:  r = f;       g = 0.f;     b = 1.f;     break;
+            default: r = 1.f;     g = 0.f;     b = 1.f - f; break;
+        }
+    }
+
     /** knob 1 moves one stacked note per detent (6 each way) */
     static const float kStackStep = 1.f / 12.f;
 
@@ -340,7 +357,13 @@ namespace chompi
                show one key per stacked note, from the middle C outwards */
             const uint32_t shown_age = System::GetNow() - shown_t_;
             const bool  show_value = shown_t_ != 0 && shown_age < kShowMs;
+            const bool  chord_mode = fx_->IsChordMode();
+            const int   tonic      = fx_->GetTonic();
             float       bar_lo = 0.f, bar_hi = 0.f, bar_lvl = 0.f;
+            /* CHORALE: in chord mode, turning knob 1 previews the chord type
+               on the tonic instead */
+            float       preview[kMaxPoly];
+            int         n_preview = 0;
             if (show_value)
             {
                 const float v = enc_values[0][0];
@@ -350,6 +373,8 @@ namespace chompi
                 const float fade = shown_age < kShowMs - 400 ? 1.f
                                    : (kShowMs - shown_age) / 400.f;
                 bar_lvl = .45f * fade;
+                if (chord_mode)
+                    n_preview = fx_->ChordNotes(float(tonic), preview);
             }
 
             /* SING: knob 6 held: the keys are an input meter, left to right,
@@ -376,12 +401,23 @@ namespace chompi
                         SetSmtLed(led_map[i], 0, 0, 0);
                     continue;
                 }
-                const bool c_key = key_map[i] % 12 == 0;
+                /* CHORALE: the tonic marks the keyboard, as the Cs did */
+                const bool c_key = ((key_map[i] - 60 - tonic) % 12 + 12) % 12 == 0;
                 const int  w     = WhiteKeyIndex(key_map[i]); // 0..14, -1 black
                 if (fx_->IsHarmonyKeyHeld(i))
                     SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
                 else if (fx_->IsStackedNote(float(key_map[i]) - 60.f))
                     SetSmtLedFloat(led_map[i], sing_gold[0], sing_gold[1], sing_gold[2]);
+                else if (show_value && chord_mode)
+                {
+                    bool on = false;
+                    for (int k = 0; k < n_preview; k++)
+                        on |= preview[k] == float(key_map[i]) - 60.f;
+                    if (on)
+                        SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
+                    else
+                        SetSmtLed(led_map[i], 0, 0, 0);
+                }
                 else if (show_value)
                 {
                     /* key w covers [w/15, (w+1)/15); lit if the bar reaches into it */
@@ -394,7 +430,7 @@ namespace chompi
                 }
                 else if (c_key)
                 {
-                    const float dim = key_map[i] == 60 ? .3f : .1f;
+                    const float dim = key_map[i] == 60 + tonic ? .3f : .1f;
                     SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
                 }
                 else
@@ -416,7 +452,10 @@ namespace chompi
                 case 1:
                 case 2:
                 {
-                    SingKnobColour(i, page, value, r, g, b);
+                    if (i == 0 && page == 0 && fx_->IsChordMode())
+                        ChordColour(fx_->GetChordType(), r, g, b); // CHORALE
+                    else
+                        SingKnobColour(i, page, value, r, g, b);
                     SetPthLedFloat(i + 1, r, g, b);
                     break;
                 }
@@ -618,7 +657,7 @@ namespace chompi
 
             // chompi key
             fx_->SetInputMonitor(true); // SING: dry voice per monitor mode (menu, knob 6)
-            if (fx_->IsFrozen() || fx_->IsLatched()) // SING: latch on; breathing while frozen
+            if (fx_->IsFrozen() || fx_->IsChordMode()) // CHORALE: chord mode; breathing while frozen
             {
                 const float lvl = fx_->IsFrozen()
                     ? .55f + .45f * sinf(float(now % 1600) * (6.2831853f / 1600.f))
@@ -785,6 +824,20 @@ namespace chompi
             uint8_t page = knob_page[encoderID];
             float old_val = enc_values[page][encoderID];
 
+            /* CHORALE: in chord mode knob 1 (page 1) picks the chord type, one
+               per detent, and previews it on the keys */
+            if(page == 0 && encoderID == 0 && fx_->IsChordMode())
+            {
+                int idx = fx_->GetChordType();
+                if(stepsPerRevolution > 0)
+                    idx = turns * kNumChords / 128;
+                else
+                    idx += turns > 0 ? 1 : turns < 0 ? -1 : 0;
+                fx_->SetChordType(idx);
+                shown_t_ = System::GetNow();
+                return true;
+            }
+
 
             // overrode this to mean increment vs force knob position (used for CCs)
             if(stepsPerRevolution > 0)
@@ -863,14 +916,14 @@ namespace chompi
             return true;
         }
 
-        /** SING: the toggle switch is latch. Compared with the engine on
-         *  every call rather than on a change of the switch: the UI starts
-         *  before the engine, whose Init() would otherwise undo a latch the
+        /** CHORALE: the toggle switch is chord mode. Compared with the engine
+         *  on every call rather than on a change of the switch: the UI starts
+         *  before the engine, whose Init() would otherwise undo the mode the
          *  switch was already in at power-on. */
         void SetSwitchState(bool state)
         {
-            if (fx_->IsLatched() != state)
-                fx_->SetLatch(state);
+            if (fx_->IsChordMode() != state)
+                fx_->SetChordMode(state);
             switch_state = state; 
         }
 

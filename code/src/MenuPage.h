@@ -278,22 +278,23 @@ namespace chompi
             SetSmtLedFloat(0, 0.f, 0.f, 0.f);
             SetSmtLedFloat(1, 0.f, 0.f, 0.f);
 
-            /* SING: the stacked interval as a key counted from the middle C
-               (dim), in the stack's direction: E 3rds, F 4ths, G 5ths, A 6ths,
-               upper C octaves; turned left, A, G, F, E, lower C below it */
+            /* CHORALE: the scale on the keys, the tonic bright amber and the
+               other scale notes dim; the keys with menu jobs (input, effects
+               order: LEDs 2-6) keep their own lights */
             {
-                static const int kIntervalUp[Harmonizer<kMaxPoly>::kNumIntervals]   = {64, 65, 67, 69, 72};
-                static const int kIntervalDown[Harmonizer<kMaxPoly>::kNumIntervals] = {57, 55, 53, 52, 48};
-                const bool  down = Harmonizer<kMaxPoly>::StackCount(enc_values[0][0]) < 0;
-                const int  *kIntervalNote = down ? kIntervalDown : kIntervalUp;
-                const int   idx  = fx_->GetStackInterval();
-                const float *c   = kIntervalColours[idx];
+                const int tonic = fx_->GetTonic();
                 for (size_t i = 7; i < (25 + 7); i++)
                 {
-                    if (key_map[i] == 60)
-                        SetSmtLedFloat(led_map[i], sing_amber[0] * .3f, sing_amber[1] * .3f, sing_amber[2] * .3f);
-                    else if (key_map[i] == kIntervalNote[idx])
-                        SetSmtLedFloat(led_map[i], c[0], c[1], c[2]);
+                    const int led = led_map[i];
+                    if (led >= 2 && led <= 6)
+                        continue;
+                    const int semis = int(key_map[i]) - 60;
+                    if (((semis - tonic) % 12 + 12) % 12 == 0)
+                        SetSmtLedFloat(led, sing_amber[0] * .7f, sing_amber[1] * .7f, sing_amber[2] * .7f);
+                    else if (fx_->InScale(semis))
+                        SetSmtLedFloat(led, sing_warm[0] * .12f, sing_warm[1] * .12f, sing_warm[2] * .12f);
+                    else
+                        SetSmtLedFloat(led, 0.f, 0.f, 0.f);
                 }
             }
 
@@ -313,17 +314,13 @@ namespace chompi
             if(stepsPerRevolution > 0)
                 return false; // fall through to normalpage
 
-            /* SING: knob 1 (stack page) picks the stacked interval here:
-               3rds, 4ths, 5ths, 6ths, octaves; one step per detent */
+            /* CHORALE: knob 1 (page 1) picks the scale here, one per detent:
+               major, minor, dorian, phrygian, lydian, mixolydian, harmonic
+               minor, major and minor pentatonic; the keys show it */
             if(encoderID == 0 && page == 0)
             {
-                int step = turns > 0 ? 1 : turns < 0 ? -1 : 0;
-                /* stacking down, the lit key sits left of the middle C: turning
-                   anticlockwise moves it outwards (wider), as clockwise does
-                   to the right when stacking up */
-                if(Harmonizer<kMaxPoly>::StackCount(enc_values[0][0]) < 0)
-                    step = -step;
-                fx_->SetStackInterval(fx_->GetStackInterval() + step);
+                const int step = turns > 0 ? 1 : turns < 0 ? -1 : 0;
+                fx_->SetScale(fx_->GetScale() + step);
                 return true;
             }
 
@@ -433,10 +430,11 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
-                if(rising) // SING: back to 3rds / no strum
+                if(rising) // CHORALE: next stack interval / SING: no strum
                 {
                     if(knob_page[0] == 0)
-                        fx_->SetStackInterval(0);
+                        fx_->SetStackInterval((fx_->GetStackInterval() + 1)
+                                              % Harmonizer<kMaxPoly>::kNumIntervals);
                     else
                     {
                         enc_values[1][0] = enc_defaults[1][0];
@@ -512,8 +510,10 @@ namespace chompi
                 chompi_key_pressed = rising; // the menu closes on its release
                 break;
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_16): // TAPE: banks
-            case static_cast<uint16_t>(Hardware::SwId::KEY_17):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_16): // TAPE: banks;
+            case static_cast<uint16_t>(Hardware::SwId::KEY_17): // CHORALE: tonic
+                if(rising)
+                    fx_->SetTonic(int(key_map[buttonID]) - 60);
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_18): // mic in, fall through
@@ -556,6 +556,8 @@ namespace chompi
             case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase,
             case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy,
             case static_cast<uint16_t>(Hardware::SwId::KEY_25): // save presets
+                if(rising) // CHORALE: tonic
+                    fx_->SetTonic(int(key_map[buttonID]) - 60);
                 break;
 
             // white keys and play/pause
@@ -567,7 +569,14 @@ namespace chompi
                     fx_->IncrementLooperDubGain(gain);
                     break;
                 }
-                // SING: the keys keep playing harmonies while the menu is open
+                /* CHORALE: a key pressed in the menu sets the tonic; its
+                   release falls through, so a key held from before the menu
+                   still lets go */
+                if(rising)
+                {
+                    fx_->SetTonic(int(key_map[buttonID]) - 60);
+                    break;
+                }
                 return false;
             }
 

@@ -18,6 +18,49 @@ namespace chompi
     static constexpr size_t kFreezeLen  = kFreezeLoop + kFreezeXf;
     extern float freeze_mem[2][kFreezeLen];
 
+    /** CHORALE: scales, as semitones above the tonic (Chompi key + knob 1) */
+    static constexpr int kNumScales = 9;
+    struct Scale
+    {
+        int n;        // notes per octave
+        int step[7];
+    };
+    static constexpr Scale kScales[kNumScales] = {
+        {7, {0, 2, 4, 5, 7, 9, 11}},  // major
+        {7, {0, 2, 3, 5, 7, 8, 10}},  // natural minor
+        {7, {0, 2, 3, 5, 7, 9, 10}},  // dorian
+        {7, {0, 1, 3, 5, 7, 8, 10}},  // phrygian
+        {7, {0, 2, 4, 6, 7, 9, 11}},  // lydian
+        {7, {0, 2, 4, 5, 7, 9, 10}},  // mixolydian
+        {7, {0, 2, 3, 5, 7, 8, 11}},  // harmonic minor
+        {5, {0, 2, 4, 7, 9}},         // major pentatonic
+        {5, {0, 3, 5, 7, 10}},        // minor pentatonic
+    };
+
+    /** CHORALE chord mode: chord types (knob 1), as scale steps above the
+     *  pressed key's degree, so each chord's quality follows the scale.
+     *  kOctave is the root an octave up. */
+    static constexpr int kOctave    = 100;
+    static constexpr int kNumChords = 10;
+    static constexpr int kChordMax  = 6;
+    struct Chord
+    {
+        int n;
+        int step[kChordMax];
+    };
+    static constexpr Chord kChords[kNumChords] = {
+        {3, {0, 2, 4}},              // triad
+        {3, {0, 1, 4}},              // sus2
+        {3, {0, 3, 4}},              // sus4
+        {4, {0, 2, 4, 5}},           // 6
+        {4, {0, 2, 4, 6}},           // 7
+        {4, {0, 2, 4, 8}},           // add9
+        {5, {0, 2, 4, 6, 8}},        // 9
+        {4, {0, 2, 4, 10}},          // add11
+        {6, {0, 2, 4, 6, 8, 10}},    // 11
+        {3, {0, 4, kOctave}},        // power (root, 5th, octave)
+    };
+
     /** SING's live harmonizer.
      *
      *  Every held key gets a voice that pitch-shifts the live input by its
@@ -48,6 +91,10 @@ namespace chompi
      *  again and crossfades to it. Letting go of every note, or turning
      *  the threshold off, goes back to live.
      *
+     *  CHORALE: the stack and the chords follow a scale and tonic (menu).
+     *  With the toggle on chord mode, a key plays a whole chord built on it
+     *  (knob 1 picks the type); one chord at a time, the newest held key's.
+     *
      *  Each voice runs one StereoPitchShifter on its own delay line
      *  (shift_mem, shift_ana in chompi_main.cpp). The dry voice is not added
      *  here: the engine's mic monitor provides it, routed by the monitor mode.
@@ -77,7 +124,12 @@ namespace chompi
             dcblock_.Init(samplerate);
             mic_filter_.Init(samplerate);
             sr_ = samplerate;
-            latch_ = false;
+            chord_mode_ = false;
+            chord_type_ = 0;
+            chord_new_  = false;
+            n_held_     = 0;
+            scale_      = 0;
+            tonic_      = 0;
             stack_ = 0;
             interval_idx_ = 0;
             dirty_ = false;
@@ -175,6 +227,72 @@ namespace chompi
             dirty_ = true;
         }
         int Interval() const { return interval_idx_; }
+
+        /** menu + knob 1: the scale, for the stack and the chords */
+        void SetScale(int idx)
+        {
+            scale_ = idx < 0 ? 0 : idx >= kNumScales ? kNumScales - 1 : idx;
+            dirty_ = true;
+        }
+        int GetScale() const { return scale_; }
+
+        /** menu + a key: the tonic, 0..11 semitones above the middle C (your
+         *  voice) */
+        void SetTonic(int pc)
+        {
+            tonic_ = ((pc % 12) + 12) % 12;
+            dirty_ = true;
+        }
+        int Tonic() const { return tonic_; }
+
+        /** a note (semitones from middle C) is in the scale */
+        bool InScale(int semis) const
+        {
+            const int rel = (((semis - tonic_) % 12) + 12) % 12;
+            const Scale &sc = kScales[scale_];
+            for (int i = 0; i < sc.n; i++)
+                if (sc.step[i] == rel)
+                    return true;
+            return false;
+        }
+
+        /** toggle switch: chord mode (on) or notes mode; switching lets
+         *  everything go */
+        void SetChordMode(bool on)
+        {
+            if (on == chord_mode_)
+                return;
+            chord_mode_ = on;
+            n_held_     = 0;
+            AllOff();
+        }
+        bool ChordMode() const { return chord_mode_; }
+
+        /** knob 1 in chord mode */
+        void SetChordType(int idx)
+        {
+            chord_type_ = idx < 0 ? 0 : idx >= kNumChords ? kNumChords - 1 : idx;
+            chord_new_  = true;
+            dirty_      = true;
+        }
+        int ChordType() const { return chord_type_; }
+
+        /** the notes of a chord of the current type built on root (semitones
+         *  from middle C), into notes; returns how many fit the range */
+        int ChordNotes(float root, float *notes) const
+        {
+            const Chord &ch  = kChords[chord_type_];
+            const int    deg = Degree(root);
+            int          n   = 0;
+            for (int i = 0; i < ch.n && n < int(kVoices); i++)
+            {
+                const float s = ch.step[i] == kOctave ? DegreeSemis(deg) + 12.f
+                                                      : DegreeSemis(deg + ch.step[i]);
+                if (s >= kStackLow && s <= kStackHigh)
+                    notes[n++] = s;
+            }
+            return n;
+        }
 
         /** a stacked note is sounding at this many semitones from middle C
          *  (lit once it has entered the strum) */
@@ -304,14 +422,23 @@ namespace chompi
                 ClearFreeze(); // a new chord from silence starts live
             }
 
-            Voice *v = Find(key);       // retrigger of a held key
-            if (latch_ && v && v->gate)
+            /* chord mode: the newest held key's chord plays (UpdateChord) */
+            if (chord_mode_)
             {
-                v->gate    = false;     // latched: a second press lets it go
+                HeldRemove(key);
+                if (n_held_ < kMaxHeld)
+                {
+                    held_[n_held_].key   = key;
+                    held_[n_held_].semis = semis;
+                    n_held_++;
+                }
+                chord_new_ = true;
                 duck_hold_ = duck_len_;
                 dirty_     = true;
                 return;
             }
+
+            Voice *v = Find(key);       // retrigger of a held key
             if (!v) v = FindFree();
             if (!v) v = FindQuietest(); // steal
             if (v->key != key || v->env <= 0.f)
@@ -331,21 +458,19 @@ namespace chompi
         {
             duck_hold_ = duck_len_;
             dirty_     = true;
-            if (latch_)
-                return; // latched: released by the next press of the key
+            if (chord_mode_)
+            {
+                /* letting go of the playing key goes back to the chord of
+                   the key held before it, if any */
+                const bool top = n_held_ > 0 && held_[n_held_ - 1].key == key;
+                HeldRemove(key);
+                if (top && n_held_ > 0)
+                    chord_new_ = true;
+                return;
+            }
             if (Voice *v = Find(key))
                 v->gate = false;
         }
-
-        /** toggle switch: keep the voices of the held keys sounding after
-         *  the keys are let go; switching it off releases everything */
-        void SetLatch(bool on)
-        {
-            latch_ = on;
-            if (!on)
-                AllOff();
-        }
-        bool Latched() const { return latch_; }
 
         /** release every voice (they ring out with the release time) */
         void AllOff()
@@ -355,9 +480,12 @@ namespace chompi
             dirty_ = true;
         }
 
-        /** a key that is held down right now (not just ringing out) */
+        /** a key that is held down right now (not just ringing out); in
+         *  chord mode, the key whose chord is playing */
         bool Held(int key) const
         {
+            if (chord_mode_)
+                return n_held_ > 0 && held_[n_held_ - 1].key == key;
             for (size_t v = 0; v < kVoices; v++)
                 if (voices_[v].gate && voices_[v].key == key)
                     return true;
@@ -579,6 +707,7 @@ namespace chompi
 
         /** stacked notes use these keys, one per stack slot */
         static constexpr int kStackKey = 1000;
+        static constexpr int kChordKey = 2000; // chord mode's notes, one per slot
         static bool IsStackKey(int key) { return key >= kStackKey; }
 
         /** Gives the held chord its stacked notes: |stack_| diatonic steps
@@ -587,6 +716,12 @@ namespace chompi
          *  the new note. */
         void UpdateStack()
         {
+            if (chord_mode_)
+            {
+                UpdateChord();
+                return;
+            }
+
             float lo = 0.f, hi = 0.f;
             int   held = 0;
             for (size_t v = 0; v < kVoices; v++)
@@ -604,7 +739,8 @@ namespace chompi
                 want = int(kVoices) - held;
             const int dir  = stack_ < 0 ? -1 : 1;
             const int base = Degree(dir > 0 ? hi : lo);
-            static const int kSteps[kNumIntervals] = {2, 3, 4, 5, 7};
+            /* scale steps: 3rds .. 6ths, and an octave is the whole scale */
+            const int kSteps[kNumIntervals] = {2, 3, 4, 5, kScales[scale_].n};
 
             float notes[kVoices];
             int   count = 0;
@@ -619,7 +755,7 @@ namespace chompi
                go to a slot that lost its voice to a key press */
             for (size_t v = 0; v < kVoices; v++)
                 if (IsStackKey(voices_[v].key) && voices_[v].key - kStackKey >= count)
-                    voices_[v].gate = false;
+                    voices_[v].gate = false; // chord slots too: none in notes mode
 
             for (int slot = 0; slot < count; slot++)
             {
@@ -640,6 +776,49 @@ namespace chompi
                 if (starts) // a slot already sounding just glides to its new note
                     StrumJoin(*v);
             }
+        }
+
+        /** Chord mode: voices the newest held key's chord, one voice per
+         *  note. A new chord (another key, or a new type) starts its notes
+         *  again, so it strums; the same chord just keeps sounding. */
+        void UpdateChord()
+        {
+            float notes[kVoices];
+            const int count = n_held_ > 0 ? ChordNotes(held_[n_held_ - 1].semis, notes) : 0;
+
+            for (size_t v = 0; v < kVoices; v++)
+                if (voices_[v].key >= kChordKey && voices_[v].key - kChordKey >= count)
+                    voices_[v].gate = false;
+
+            for (int slot = 0; slot < count; slot++)
+            {
+                const int key = kChordKey + slot;
+                Voice *v = Find(key);
+                if (!v) v = FindFree();
+                if (!v) v = FindReleasing();
+                if (!v) break;
+                if (v->key != key || v->env <= 0.f)
+                    v->shifter.Reset();
+                const bool starts = !v->gate || v->key != key || chord_new_;
+                if (starts)
+                    v->pitch = notes[slot];
+                v->key   = key;
+                v->semis = notes[slot];
+                UpdateRatio(*v, size_t(v - voices_));
+                v->gate  = true;
+                if (starts)
+                    StrumJoin(*v);
+            }
+            chord_new_ = false;
+        }
+
+        void HeldRemove(int key)
+        {
+            int j = 0;
+            for (int i = 0; i < n_held_; i++)
+                if (held_[i].key != key)
+                    held_[j++] = held_[i];
+            n_held_ = j;
         }
 
         /** Puts a starting note into the current strum, or opens a new one.
@@ -763,22 +942,27 @@ namespace chompi
             return v.strum && v.gate && strum_age_ < v.start_at;
         }
 
-        /** C major scale degree at or below a note (semitones from middle C;
-         *  a black key counts as the white key below it) */
-        static int Degree(float semis)
+        /** scale degree at or below a note (semitones from middle C; a note
+         *  outside the scale counts as the scale note below it) */
+        int Degree(float semis) const
         {
-            static const int kDeg[12] = {0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6};
-            const int s   = int(lroundf(semis));
-            const int oct = s >= 0 ? s / 12 : -((11 - s) / 12);
-            return oct * 7 + kDeg[s - oct * 12];
+            const Scale &sc  = kScales[scale_];
+            const int    rel = int(lroundf(semis)) - tonic_;
+            const int    oct = rel >= 0 ? rel / 12 : -((11 - rel) / 12);
+            const int    pc  = rel - oct * 12;
+            int          idx = 0;
+            for (int i = 0; i < sc.n; i++)
+                if (sc.step[i] <= pc)
+                    idx = i;
+            return oct * sc.n + idx;
         }
 
-        /** semitones from middle C of a C major scale degree */
-        static float DegreeSemis(int deg)
+        /** semitones from middle C of a scale degree */
+        float DegreeSemis(int deg) const
         {
-            static const int kScale[7] = {0, 2, 4, 5, 7, 9, 11};
-            const int oct = deg >= 0 ? deg / 7 : -((6 - deg) / 7);
-            return float(oct * 12 + kScale[deg - oct * 7]);
+            const Scale &sc  = kScales[scale_];
+            const int    oct = deg >= 0 ? deg / sc.n : -((sc.n - 1 - deg) / sc.n);
+            return float(tonic_ + oct * 12 + sc.step[deg - oct * sc.n]);
         }
 
         /** pitch = key, plus a few cents of alternating detune
@@ -865,7 +1049,10 @@ namespace chompi
         bool             frozen_, capturing_, freeze_armed_, freeze_on_;
         size_t           cap_n_, cap_buf_, play_buf_, play_pos_, old_buf_, old_pos_;
         int              swap_;
-        bool             latch_;
+        bool             chord_mode_, chord_new_;          /* CHORALE */
+        int              chord_type_, scale_, tonic_, n_held_;
+        static constexpr int kMaxHeld = 8;
+        struct Held_ { int key; float semis; } held_[kMaxHeld];
         float            sr_, level_, doubler_, spread_;
         int              stack_, interval_idx_;
         int              strum_gap_, strum_age_; /* samples */

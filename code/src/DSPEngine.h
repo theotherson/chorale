@@ -607,8 +607,17 @@ namespace daisy
         bool IsStackedNote(float semis) { return harmonizer.Stacked(semis); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }
         bool IsHarmonyKeyHeld(int key) { return harmonizer.Held(key); }
-        void SetLatch(bool on) { harmonizer.SetLatch(on); }
-        bool IsLatched() { return harmonizer.Latched(); }
+        /* CHORALE: chord mode (toggle), chord type, scale and tonic */
+        void SetChordMode(bool on) { harmonizer.SetChordMode(on); }
+        bool IsChordMode() { return harmonizer.ChordMode(); }
+        void SetChordType(int idx) { harmonizer.SetChordType(idx); }
+        int GetChordType() { return harmonizer.ChordType(); }
+        void SetScale(int idx) { harmonizer.SetScale(idx); }
+        int GetScale() { return harmonizer.GetScale(); }
+        void SetTonic(int pc) { harmonizer.SetTonic(pc); }
+        int GetTonic() { return harmonizer.Tonic(); }
+        bool InScale(int semis) { return harmonizer.InScale(semis); }
+        int ChordNotes(float root, float *notes) { return harmonizer.ChordNotes(root, notes); }
         bool IsFrozen() { return harmonizer.Frozen(); }
         void SetSpread(float val) { harmonizer.SetSpread(val); }
 

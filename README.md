@@ -22,7 +22,7 @@ function: hold the Chompi key and turn.
 
 | Knob | Page 1 | Chompi key + turn | Page 2 | Chompi key + turn |
 |---|---|---|---|---|
-| 1 | **stack**: adds notes to the held chord, one per click | stacked **interval**: 3rds, 4ths, 5ths, 6ths, octaves | **strum**: centre all at once; right upward, left downward; further out, longer gap (up to 500 ms) | **glide** |
+| 1 | notes mode: **stack**, adds notes to the held chord, one per click · chord mode: **chord type** | **scale**: major, minor, dorian, phrygian, lydian, mixolydian, harmonic minor, major/minor pentatonic | **strum**: centre all at once; right upward, left downward; further out, longer gap (up to 500 ms) | **glide** |
 | 2 | harmony **attack**, 2 ms…500 ms | **input threshold**, −70…−20 dB (default −50; fully left: off) | filter envelope **attack**, 1 ms…2 s | filter **cutoff**, 40 Hz…16 kHz |
 | 3 | harmony **release**, 20 ms…3 s; fully right: never fade | **freeze threshold**, −60…−5 dB | filter envelope **decay**, 10 ms…5 s | filter **resonance** |
 | 4 | **reverb/delay** · **bitcrush** · **doubler** (three pages) | delay time · output compression · warble | | |
@@ -33,7 +33,8 @@ function: hold the Chompi key and turn.
 
 | Knob | |
 |---|---|
-| 1 | back to 3rds (page 2: strum back to the centre) |
+| 1 | next stack interval: 3rds, 4ths, 5ths, 6ths, octaves (page 2: strum back to the centre) |
+| any key | sets the **root** (tonic) of the scale to that note |
 | 2 | filter envelope on/off (starts off) |
 | 3 | freeze on/off (starts off) |
 | 4 | reset the effects: reverb, bitcrush, doubler, delay time, compression, warble |
@@ -41,18 +42,35 @@ function: hold the Chompi key and turn.
 
 **Hold knob 6** for an input meter across the keys (green, yellow from −12 dB, red from −4 dB).
 
-**Toggle switch: latch.** In the position that turns TAPE's mic monitor off, notes keep sounding
-after you let go of the keys, so your hands are free for the knobs. Press a sounding key again to
-drop that note; switching back releases them all.
+**Toggle switch: notes or chords.** In one position each key plays one note (**notes mode**);
+in the other (the one that turned TAPE's mic monitor off) each key plays a whole chord
+(**chord mode**). Either way, notes fade with the release when you let go.
 
 Every start begins from the defaults; CHORALE does not save knob settings.
 
+## Scale and root
+
+Hold the Chompi key and turn knob 1 to pick a scale, and press a key to set its root; the keys
+show the scale while you hold it (the root bright amber, the other scale notes dim). The root is
+counted from your voice, which is always the middle C: with root C, your voice is the root; with
+root G, your voice is the 4th of G. The stack and the chords both follow the scale, so each
+chord's quality comes out of it. A note outside the scale counts as the scale note below it.
+
+## Chord mode
+
+Each key plays a chord built on it from the scale, one chord at a time: the newest held key's,
+and letting go of it goes back to the key held before. In C major, C plays C major, E plays E
+minor, B plays B diminished. Knob 1 picks the chord type, one per click, and shows it on the keys
+built on the root: triad, sus2, sus4, 6, 7, add9, 9, add11, 11, power (root, 5th, octave). A
+"7" is a major 7th on C and a dominant 7th on G, as the scale has it. Strum and glide play each
+new chord as a strum.
+
 ## Stack, strum and glide
 
-- **Stack** adds notes in C major, counted from your voice: right of centre above the highest
-  held note, left of centre below the lowest. Holding C E G with 3rds gives B, D, F above, or A,
-  F, D below. Black keys count as the white key below them. Held keys get voices first: holding
-  3 keys leaves room for 4 stacked notes. Nothing is stacked while no keys are held.
+- **Stack** (notes mode) adds scale notes: right of centre above the highest held note, left of
+  centre below the lowest. Holding C E G in C major with 3rds gives B, D, F above, or A, F, D
+  below. Held keys get voices first: holding 3 keys leaves room for 4 stacked notes. Nothing is
+  stacked while no keys are held. Chompi key + press knob 1 steps the interval.
 - **Strum** brings in notes that start together one at a time: keys pressed within 30 ms of
   each other plus the notes the stack adds to them. With strum up, the first note waits those
   30 ms too, so the order is right even if you press the top key first.
@@ -84,7 +102,8 @@ sweeps up to fully open and back down.
 ## Input and resample
 
 Hold the Chompi key and press a black key below the middle C: **F#** built-in mic, **G#** line in
-(plugging into the input jack selects it), **A#** resample.
+(plugging into the input jack selects it), **A#** resample. These keys, and C# / D# above the middle C (effects before or after the looper), keep their
+menu jobs instead of setting the root; every note also has a free key in the other octave.
 
 In **resample** mode the harmonies play from the **loop** instead of your voice: record a loop,
 select resample, and each held key adds a pitch-shifted copy of it, with stack, strum, glide,
@@ -94,19 +113,19 @@ resample mode.
 
 ## Lights
 
-- **Keys:** held keys magenta, stacked notes gold while sounding, the middle C dim amber. Turning
-  the stack knob shows how many notes are stacked for a moment, one white key each from the
-  middle C.
-- **Knob rings** brighten as each control turns up: stack warm white (coral below, gold above);
+- **Keys:** held keys magenta, stacked and chord notes gold while sounding, the root dim amber.
+  Turning the stack knob shows how many notes are stacked for a moment, one white key each from
+  the middle C; in chord mode, turning knob 1 shows the chord type built on the root.
+- **Knob rings** brighten as each control turns up: stack warm white (coral below, gold above); chord type one colour each around the wheel;
   strum green up, dark orange down; glide teal; attack yellow, release deep orange; filter attack
   purple, decay blue, cutoff green, resonance pale yellow; reverb blue, bitcrush red, doubler and
   spread white, compression peach.
-- **While you hold the Chompi key:** the stacked interval's key lights up from the middle C in
-  the stack's direction (E, F, G, A, upper C for 3rds to octaves; A, G, F, E, lower C when
-  stacking down, where turning anticlockwise moves it outwards). The knob 2 ring shows the input
+- **While you hold the Chompi key:** the keys show the scale (root bright amber, scale notes dim)
+  and the knob 1 ring the stack interval (3rds gold, 4ths amber, 5ths coral, 6ths rose, octaves
+  warm white). The knob 2 ring shows the input
   threshold live (magenta over it, dim under it), the knob 3 ring the freeze (white recording,
   magenta over the threshold). Pressing knob 2 or 3 shows white for on, dim white for off.
-- **Chompi key:** magenta while latched; it breathes while a freeze holds.
+- **Chompi key:** magenta in chord mode; it breathes while a freeze holds.
 
 ## Tips
 
