@@ -35,7 +35,10 @@ constexpr ClockDivMapping freeDivs[] = {
     {48, 60, 4, 6, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f},
 };
 
-constexpr uint32_t tapTempoTimeout = 750; // period between 160BPM notes
+/* CHORALE: tempo in steps per minute at the middle rate, 60..300 (TEMPO:
+   160..480), starting at 150 */
+constexpr uint32_t kMinTempo = 60, kMaxTempo = 300, kStartTempo = 150;
+constexpr uint32_t tapTempoTimeout = 120000 / kMinTempo; // taps 2 steps apart, down to the slowest
 
 class clockManager {
 
@@ -68,7 +71,7 @@ class clockManager {
         intervalCounter[0] = intervalCounter[1] = 0;
         calculatedInterval[0] = calculatedInterval[1] = calculatedInterval[2] = 12;
 
-        current_tempo = 320; //Initial clock tempo 320 bpm
+        current_tempo = kStartTempo;
         changeTempo(0);
 
         // Middle position ticks number
@@ -168,11 +171,11 @@ class clockManager {
 
     void changeTempo(int turns) {
         current_tempo += turns;
-        if (current_tempo > 480) {
-            current_tempo = 480;
+        if (current_tempo > kMaxTempo) {
+            current_tempo = kMaxTempo;
         }
-        else if (current_tempo < 160) {
-            current_tempo = 160;
+        else if (current_tempo < kMinTempo) {
+            current_tempo = kMinTempo;
         }
 
         intervalUsFree = 60000000 / current_tempo;
@@ -319,11 +322,12 @@ class clockManager {
         }
         else {
             current_tempo = static_cast<uint32_t>(120000.f / (now - tapTempoTimer)); // 2 beats per tap interval
-            current_tempo = current_tempo > 480 ? 480 : current_tempo;
+            current_tempo = current_tempo > kMaxTempo ? kMaxTempo
+                          : current_tempo < kMinTempo ? kMinTempo : current_tempo;
 
             changeTempo(0);
 
-            ret = static_cast<float>(current_tempo - 160) / 320.f;
+            ret = static_cast<float>(current_tempo - kMinTempo) / float(kMaxTempo - kMinTempo);
         }
         tapTempoTimer = now;
         return ret;

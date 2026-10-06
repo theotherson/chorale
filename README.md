@@ -121,9 +121,11 @@ are played one per step, on TEMPO's clock, as slices in slice mode or as harmoni
 stack on it, or in chord mode a chord) otherwise; each sounds for 60% of its step. The sounding
 step lights white, the other keys in the sequence red (harmonies) or yellow (slices).
 
-- **Wheel:** turn for the tempo; hold it and turn for the rate; click for **latch**: the keys you
-  hold stay in after you let go, so your hands are free (the next key pressed after letting go
-  of all starts a new set). Chompi key + click taps the tempo. The wheel's lights show the steps.
+- **Wheel:** turn for the tempo, 60…300 steps a minute (starting at 150); hold it and turn for
+  the rate; click for **latch**: the keys you hold stay in after you let go, so your hands are
+  free. With latch on, pressing a key not in the pattern adds it and pressing one in it takes it
+  out; clicking the wheel again clears it. Chompi key + click taps the tempo. The wheel's lights
+  show the steps.
 - **Chompi key + play:** the pattern mode: sequence (the order you pressed the keys), arp up,
   arp down, arp up and down, random (play key: gold, amber, coral, rose, warm white).
 - **Chompi key + turn the wheel:** the rest pattern, TEMPO's five (none, then more gaps).

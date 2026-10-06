@@ -13,8 +13,9 @@ namespace chompi
      *  Modes, as TEMPO: sequence (the order the keys were pressed), arp up,
      *  arp down, arp up and down, random. Rest patterns: TEMPO's five.
      *
-     *  Latch: the held keys stay in after they are let go; the next key
-     *  pressed after all are up starts a new set. Called from the audio
+     *  Latch: the held keys stay in after they are let go; pressing a key
+     *  not in the pattern adds it, one in it takes it out (as TEMPO).
+     *  Latch off clears what is no longer held. Called from the audio
      *  callback only.
      */
     class Sequencer
@@ -41,12 +42,14 @@ namespace chompi
 
         void KeyDown(int key, float semis)
         {
-            if (latched_ && held_ == 0)
-                n_ = 0; // a new latched set
             held_++;
             for (int i = 0; i < n_; i++)
                 if (keys_[i].key == key)
+                {
+                    if (latched_)
+                        Remove(key); // latched: a second press takes it out
                     return;
+                }
             if (n_ < kMaxKeys)
                 keys_[n_++] = {key, semis};
         }
