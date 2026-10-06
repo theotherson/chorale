@@ -546,11 +546,14 @@ namespace chompi
                 v->gate = false;
         }
 
-        /** release every voice (they ring out with the release time) */
+        /** release every voice (they ring out with the release time). Chord
+         *  mode's held keys go too, or the next Refresh() would voice their
+         *  chord again with no key down. */
         void AllOff()
         {
             for (size_t v = 0; v < kVoices; v++)
                 voices_[v].gate = false;
+            n_held_ = 0;
             dirty_ = true;
         }
 

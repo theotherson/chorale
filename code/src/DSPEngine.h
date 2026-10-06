@@ -697,6 +697,8 @@ namespace daisy
          *  the sequence, or a press, plays them again) */
         void SetSeqPlay(bool on)
         {
+            if (seq_key_ >= 0)
+                TargetOff(seq_key_);
             harmonizer.AllOff();
             slices_.AllOff();
             seq_key_ = -1;
