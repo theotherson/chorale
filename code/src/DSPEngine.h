@@ -157,7 +157,7 @@ namespace daisy
             crush_l_ = crush_r_ = 0.f;
 
             mgain_ = mgain_target_ = .8f;
-            dry_ = dry_target_ = wet_ = wet_target_ = 1.f; // SING: dry/wet centred
+            dry_ = dry_target_ = .5f; wet_ = wet_target_ = 1.f; // CHORALE: 75% wet
 
             warble_.Init(samplerate);
             warble_.SetFreq(.1f);

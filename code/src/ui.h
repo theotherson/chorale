@@ -22,7 +22,7 @@ namespace chompi
            Knob 6: volume / dry-wet (.5 = both full). The page 3 row keeps
            knob 6's input gain (Chompi key on page 2). */
         {.5f, .4f, 0.f, .5f, .75f, .84f},  // page 1: knob 2 input threshold, knob 3 freeze
-        {.5f, 1.f, 0.f, .5f, 0.f, .5f},    // page 2: knob 2 cutoff, knob 3 resonance
+        {.5f, 1.f, 0.f, .5f, 0.f, .75f},   // page 2: knob 2 cutoff, knob 3 resonance
         {0.f, 0.f, 0.f, 0.f, 0.f, .75f},   // page 3
         {0.f, 0.f, 0.f, 0.f, 0.f, 0.f},    // page 4
     };

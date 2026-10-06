@@ -46,7 +46,7 @@ namespace chompi
                Init (Harmonizer, FilterEnv) starts from the same values */
             /* CHORALE: the envelopes, on the Chompi key with knobs 2-3 */
             amp_attack_  = .1f;
-            amp_release_ = .5f;
+            amp_release_ = .86f; // 1.5 s
             glide_   = 0.f;
             f_attack_    = 0.f;
             f_decay_     = .5f;
@@ -469,7 +469,7 @@ namespace chompi
                     enc_values[1][2] = enc_defaults[1][2]; // filter resonance
                     fx_->SetFreeze(enc_values[0][2]);
                     fx_->SetFilterEnvRes(enc_values[1][2]);
-                    amp_release_ = .5f;
+                    amp_release_ = .86f; // 1.5 s
                     f_decay_     = .5f;
                     fx_->SetDecay(amp_release_);
                     fx_->SetFilterEnvDecay(f_decay_);

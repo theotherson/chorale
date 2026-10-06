@@ -158,7 +158,7 @@ namespace chompi
             freeze_on_ = true; // off at its default: threshold fully left
             SetLevel(.75f);
             SetAttack(.1f);
-            SetRelease(.5f);
+            SetRelease(.86f); // 1.5 s
             SetDoubler(0.f);
             SetSpread(0.f);
 
