@@ -25,7 +25,14 @@ Engine engine;
 OptionsManager options;
 
 daisysp::Reverb DSY_DTCMRAM_BSS reverb;
-chompi::InterpolatedDelayLine::AudioSample DSY_SDRAM_BSS del_mem[kMaxDelayTime];
+
+/* CHORALE: TEMPO's granular delay (10 s stereo, plus a frozen copy) and the
+   clock it follows, ticked from the audio callback */
+constexpr size_t kGranularLen = 480000; // 10 s at 48 kHz, per channel
+float DSY_SDRAM_BSS granularBuffer[kGranularLen * 2];
+float DSY_SDRAM_BSS frozenBuffer[kGranularLen * 2];
+granularDelay gdelay;
+clockManager  cManager;
 
 RamBufferMemory loop_buff;
 int16_t DSY_SDRAM_BSS loop_mem[kMaxRamBuffSize]; 
@@ -136,6 +143,17 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 
     ui.GenerateEvents();
     engine.Prepare();
+
+    /* CHORALE: TEMPO's clock, counted in samples (its timer's job there) */
+    for(int t = cManager.Advance(size); t > 0; t--)
+    {
+        cManager.incrementCounters();
+        gdelay.setClockPulse();
+    }
+    if(cManager.checkIntervalExpired(0))
+        gdelay.setClockEdge();
+    cManager.checkIntervalExpired(1);
+    cManager.checkIntervalExpired(2);
 
     // does this have to happen in the audio callback?
     if(hw.jack_detect.Read() != line_in_state)
@@ -376,7 +394,9 @@ int main(void)
     // meter.Init(hw.seed.AudioSampleRate(), hw.seed.AudioBlockSize());
 
     loop_buff.Init(&loop_mem[0]);
-    engine.Init(hw.seed.AudioSampleRate(), &reverb, &del_mem[0], 
+    cManager.Init(hw.seed.AudioSampleRate());
+    gdelay.Init(granularBuffer, frozenBuffer, kGranularLen, &cManager, false);
+    engine.Init(hw.seed.AudioSampleRate(), &reverb, &gdelay, 
                 &loop_buff, options.tape_slew_on,
                 MonitorMode(options.monitor_position));
 

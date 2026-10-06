@@ -17,11 +17,11 @@ extern chompi::Harmonizer<7> harmonizer;
 #include "reverb.h"
 #include "RamBuffer.h"
 #include "limiter.h"
-#include "InterpolatedDelayLine.h"
+#include "granularDelay.h"   // CHORALE: TEMPO's granular delay and reverb
+#include "SimpleCompressor.h"
 #include <algorithm>
 
 using namespace daisy;
-static constexpr size_t kMaxDelayTime = 48128 * 2; // stereo, > 1 seconds at 48kHz
 
 static constexpr float kLineOutGain = .3f;
 static constexpr float kHpGain = .2f;
@@ -110,7 +110,7 @@ namespace daisy
         void Init(
             float samplerate, 
             daisysp::Reverb* reverb, 
-            chompi::InterpolatedDelayLine::AudioSample* del,
+            granularDelay* gdelay,
             RamBufferMemory* loop_buff,
             bool tape_slew,
             MonitorMode mon_mode)
@@ -128,11 +128,17 @@ namespace daisy
             reverb_->SetInputGain(.3f);
             reverb_->SetLowpass(1.f);
 
-            del_.Init(del, kMaxDelayTime);
-            del_.SetDelay(kMaxDelayTime * .5f);
-
-            SetDelayTime(.5f);
-            dly_time_ = dly_time_target_;
+            /* CHORALE: TEMPO's granular delay, its reverb on the delay's
+               output, and its compressor ducking the delay under the dry */
+            gdelay_ = gdelay;
+            gcomp_.Init();
+            gwet_ = gwet_target_ = gdry_ = gdry_target_ = 1.f;
+            reverb_amt_ = reverb_amt_target_ = 0.f;
+            reverb_boost_ = reverb_boost_target_ = 0.f;
+            SetGranularMain(.5f);
+            SetGranularMix(.5f);
+            SetGranularAlt(0.f);
+            SetGranularFeedback(.3f);
 
             mic_filter_.Init(samplerate);
             harmonizer.Init(samplerate);
@@ -225,48 +231,37 @@ namespace daisy
                 warble_.Process(outl[i], outr[i], &outl[i], &outr[i]);
             }
 
-            // delay, in its own block to optimize SDRAM access
+            /* CHORALE: TEMPO's delay and reverb (FxEngine::Process). The
+               send goes into the granular delay; its output, plus some of
+               the send (reverb boost), into the reverb; the compressor ducks
+               that under the dry signal */
             for(size_t i = 0; i < size; i++)
             {
-                // fonepole and set controls
-                // dly_amt_ is a duplicate of reverb_amt_, but we want to fonepole it in this loop
-                fonepole(dly_feedback_, dly_feedback_target_, .001f);
-                fonepole(dly_time_, dly_time_target_, .001f);
-                fonepole(dly_amt_, dly_amt_target_, .001f); 
-                del_.SetDelay(dly_time_); 
-
-                // read
-                const float del_vol = dly_feedback_ < .2f ? dly_feedback_ * 5.f : 1.f;
-                InterpolatedDelayLine::AudioSample del_read = del_.Read();
-                const float delsig_l = s162f(del_read.l) * del_vol;
-                const float delsig_r = s162f(del_read.r) * del_vol;
-
-                // write
-                const float mono_sum = (outl[i] + outr[i]) * .5f;
-                const float del_in = mono_sum + delsig_r * powf(dly_feedback_, .7f);
-                const InterpolatedDelayLine::AudioSample del_write = {int16_t(f2s16(del_in)), int16_t(f2s16(delsig_l))};
-                del_.Write(del_write);
-
-                // dry/wet mix
-                const float wet_mix = dly_feedback_ > .25f ? .5f : 2.f * dly_feedback_; // quickly to 50%
-                const float dry_mix = dly_feedback_ > .83f ? .5f : (1 - .6f * dly_feedback_); // slowly to 50%
-
-                outl[i] = outl[i] * dry_mix + delsig_l * wet_mix;
-                outr[i] = outr[i] * dry_mix + delsig_r * wet_mix;
-            }
-
-            // reverb, in its own block to optimize SDRAM access
-            for(size_t i = 0; i < size; i++)
-            {
-                // fonepole and set controls
+                fonepole(gwet_, gwet_target_, .001f);
+                fonepole(gdry_, gdry_target_, .001f);
                 fonepole(reverb_amt_, reverb_amt_target_, .001f);
-                fonepole(reverb_time_, reverb_time_target_, .001f);
+                fonepole(reverb_boost_, reverb_boost_target_, .001f);
+
+                const float wet_l = outl[i] * gwet_, wet_r = outr[i] * gwet_;
+                float       dry_l = outl[i] * gdry_, dry_r = outr[i] * gdry_;
+
+                float dl = 0.f, dr = 0.f;
+                gdelay_->write(wet_l, wet_r);
+                gdelay_->read(&dl, &dr);
+
                 reverb_->SetAmount(reverb_amt_ * reverb_amt_ * .8f);
-                reverb_->SetTime(reverb_time_);
-                reverb_->SetLowpass(reverb_amt_ * .6f + .4f);
+                reverb_->SetTime(reverb_amt_);
+                reverb_->SetLowpass(reverb_amt_ * .55f + .4f);
                 reverb_->SetDiffusion(reverb_amt_ * .6f);
 
-                reverb_->Process(&outl[i], &outr[i]);
+                dl += wet_l * reverb_boost_;
+                dr += wet_r * reverb_boost_;
+                reverb_->Process(&dl, &dr);
+
+                gcomp_.Process(&dl, &dr, &dry_l, &dry_r);
+
+                outl[i] = dl + dry_l;
+                outr[i] = dr + dry_r;
             }
         }
 
@@ -648,15 +643,36 @@ namespace daisy
         inline void SetFinalComp(float comp) { final_lim_target_ = comp; }
         inline float GetFinalComp() { return final_lim_target_; }
 
-        inline void SetReverb(float val) { dly_amt_target_ = reverb_amt_target_ = 1.3f * logf(val + 1.f); }
-        inline void SetDelayFeedback(float val) { dly_feedback_target_ = val * .9f; }
-        inline void SetDelayTime(float val) {
-            dly_time_target_ = .99f * powf(val, 3.f) * kMaxDelayTime + 450;
-
-            reverb_time_target_ = val;
-            reverb_time_target_ = fclamp(reverb_time_target_, .05, .97);
+        /* CHORALE: TEMPO's delay controls (FxEngine.h). Knob 4 page 1: left
+           of centre the random delay, the centre off, right the reverb delay
+           with the reverb coming in */
+        void SetGranularMain(float val)
+        {
+            gdelay_->setMainControl(val);
+            if (val > .55f)
+            {
+                const float norm = (val - .55f) / (1.f - .55f);
+                reverb_amt_target_   = .25f + .65f * powf(norm, .5f);
+                reverb_boost_target_ = val > .6f ? .3f : 0.f;
+            }
+            else
+                reverb_amt_target_ = reverb_boost_target_ = 0.f;
         }
-
+        /** knob 4 page 2: right of centre less dry, left less wet */
+        void SetGranularMix(float val)
+        {
+            if (val >= .5f) { gdry_target_ = 2.f - val * 2.f; gwet_target_ = 1.f; }
+            else            { gdry_target_ = 1.f;             gwet_target_ = val * 2.f; }
+        }
+        void SetGranularAlt(float val) { gdelay_->setAltControl(val); }
+        void SetGranularFeedback(float val)
+        {
+            gdelay_->setFeedback(val);
+            gcomp_.setAmount(val > .6f ? (val - .6f) / (1.f - .6f) : 0.f);
+        }
+        void ToggleGranularFreeze() { gdelay_->toggleBufferLock(); }
+        void SetGranularFreeze(bool on) { gdelay_->setBufferLock(on); }
+        void GetGranularColors(float *c) { gdelay_->getColors(c); }
         inline void SetWarble(float val) { warble_.SetFreq(val); }
 
         inline void SetFilter(float val) { cutoff_target_ = val; }
@@ -868,7 +884,10 @@ namespace daisy
         const float *mic_d_ = nullptr;           // this block's delayed mic
         DjFilter filter_;
         daisysp::Reverb* reverb_;
-        chompi::InterpolatedDelayLine del_;
+        granularDelay   *gdelay_;    // CHORALE: TEMPO's delay (chompi_main.cpp)
+        SimpleCompressor gcomp_;
+        float gwet_, gwet_target_, gdry_, gdry_target_;
+        float reverb_boost_, reverb_boost_target_;
         Warble warble_;
         daisysp::DcBlock dcblock_mic_in_;
         daisysp::DcBlock dcblock_line_in_l_;
@@ -877,11 +896,7 @@ namespace daisy
         daisysp::DcBlock dcblock_fx_r_;
 
 
-        float dly_time_, dly_time_target_;
-        float dly_feedback_, dly_feedback_target_;
         float reverb_amt_, reverb_amt_target_;
-        float reverb_time_, reverb_time_target_;
-        float dly_amt_, dly_amt_target_;
         float crush_, crush_target_, crush_phase_, crush_l_, crush_r_; // SING
         float cutoff_, cutoff_target_;
         float res_, res_target_;

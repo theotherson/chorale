@@ -40,12 +40,14 @@ namespace chompi
             input_toggled = false;
 
             final_comp = 0.f;
-            delay_time = .5f;
+            grain_alt_ = 0.f;   // CHORALE: TEMPO's delay randomness and feedback
+            grain_fb_  = .3f;
             resonance = 0.f;
             warble = 0.f;
             fx_->SetFinalComp(final_comp);
             fx_->SetFilterResonance(resonance);
-            fx_->SetDelayTime(delay_time);
+            fx_->SetGranularAlt(grain_alt_);
+            fx_->SetGranularFeedback(grain_fb_);
             fx_->SetWarble(warble);
 
             /* SING: what the Chompi key sets on knobs 2-4; the engine's
@@ -126,12 +128,17 @@ namespace chompi
                 {
                     SetPthLedFloat(4, 1.f, 1.f, 1.f);
                 }
-                else if(knob_page[3] == 0) // reverb page: delay time, blue
+                else if(knob_page[3] == 0) // CHORALE: TEMPO's delay: randomness, blue
                 {
-                    const float lvl = .1f + .9f * delay_time;
+                    const float lvl = .1f + .9f * grain_alt_;
                     SetPthLedFloat(4, blue[0] * lvl, blue[1] * lvl, blue[2] * lvl);
                 }
-                else if(knob_page[3] == 1) // SING: bitcrush page: compressor, peach
+                else if(knob_page[3] == 1) // CHORALE: TEMPO's delay mix: feedback, orange
+                {
+                    const float lvl = .1f + .9f * grain_fb_;
+                    SetPthLedFloat(4, 1.f * lvl, .3f * lvl, 0.f);
+                }
+                else if(knob_page[3] == 2) // SING: bitcrush page: compressor, peach
                 {
                     const float lvl = .1f + .9f * final_comp;
                     SetPthLedFloat(4, orange[0] * lvl, orange[1] * lvl, orange[2] * lvl);
@@ -352,13 +359,17 @@ namespace chompi
             {
                 if (encoderID == 3)
                 {
-                    if(page == 0) // magic
+                    if(page == 0) // CHORALE: TEMPO's delay randomness
                     {
-                        delay_time += inc;
-                        delay_time = fclamp(delay_time, 0.f, 1.f);
-                        fx_->SetDelayTime(delay_time);
+                        grain_alt_ = fclamp(grain_alt_ + inc, 0.f, 1.f);
+                        fx_->SetGranularAlt(grain_alt_);
                     }
-                    else if (page == 1) // SING: bitcrush page: the compressor
+                    else if (page == 1) // CHORALE: TEMPO's delay feedback
+                    {
+                        grain_fb_ = fclamp(grain_fb_ + inc, 0.f, 1.f);
+                        fx_->SetGranularFeedback(grain_fb_);
+                    }
+                    else if (page == 2) // SING: bitcrush page: the compressor
                     {
                         final_comp += inc;
                         final_comp = fclamp(final_comp, 0.f, 1.f);
@@ -480,26 +491,26 @@ namespace chompi
                 fx_reset = rising;
                 if(rising)
                 {
-                    enc_values[0][3] = enc_defaults[0][3];
-                    enc_values[1][3] = enc_defaults[1][3];
-                    enc_values[2][3] = enc_defaults[2][3];
+                    for (int pg = 0; pg < 4; pg++)
+                        enc_values[pg][3] = enc_defaults[pg][3];
 
-                    fx_->SetReverb(enc_values[0][3]);
-                    fx_->SetDelayFeedback(enc_values[0][3]);
-                    fx_->SetCrush(enc_values[1][3]);
-                    fx_->SetDoubler(enc_values[2][3]); // SING: page 3 is the doubler
+                    /* CHORALE: TEMPO's delay (off, mix centred, unfrozen),
+                       bitcrush, doubler, compressor and warble */
+                    fx_->SetGranularMain(enc_values[0][3]);
+                    fx_->SetGranularMix(enc_values[1][3]);
+                    fx_->SetGranularFreeze(false);
+                    fx_->SetCrush(enc_values[2][3]);
+                    fx_->SetDoubler(enc_values[3][3]);
 
-                    delay_time = .5f;
+                    grain_alt_ = 0.f;
+                    grain_fb_  = .3f;
                     warble = 0.f;
-                    final_comp = 0.f; // SING: the compressor is on knob 4 now
+                    final_comp = 0.f;
 
-                    fx_->SetDelayTime(delay_time);
+                    fx_->SetGranularAlt(grain_alt_);
+                    fx_->SetGranularFeedback(grain_fb_);
                     fx_->SetWarble(warble);
                     fx_->SetFinalComp(final_comp);
-
-                    if (split_delay_) {
-                        enc_values[0][3] = .5f;
-                    }
                 }
             }
 
@@ -637,7 +648,7 @@ namespace chompi
         uint32_t blink_startt;
         uint32_t last_blink;
 
-        float delay_time, resonance, warble;
+        float grain_alt_, grain_fb_, resonance, warble; // CHORALE: TEMPO's delay controls
         float onset_, freeze_, cutoff_, env_res_, spread_, glide_; // SING
 
         /* SING: a press of knob 2 / 3 shows its ring white (on) or dim

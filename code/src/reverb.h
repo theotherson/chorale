@@ -45,6 +45,7 @@ class Reverb {
     engine_.SetLFOFrequency(LFO_2, 0.3f / sample_rate);
     lp_ = 0.7f;
     diffusion_ = 0.625f;
+    freeze_ = 0.f;
   }
   
   void Process(float* left, float* right) {
@@ -75,10 +76,11 @@ class Reverb {
     E::Context c;
 
     const float kap = diffusion_;
-    const float klp = lp_;
-    const float krt = reverb_time_;
+    const float krt = fclamp(reverb_time_ + freeze_, 0.f, 1.f);
+    const float lock = 1.0f - freeze_;
     const float amount = amount_;
-    const float gain = input_gain_;
+    const float klp = fclamp(lp_ + freeze_ * (1.0f - lp_), 0.f, 1.f);
+    const float gain = input_gain_ * lock;
 
     float lp_1 = lp_decay_1_;
     float lp_2 = lp_decay_2_;
@@ -156,6 +158,10 @@ class Reverb {
   inline void Clear() {
     engine_.Clear();
   }
+
+  inline void SetFreeze(bool freeze) {
+    freeze_ = freeze ? 1.f : 0.f;
+  }
   
  private:
   typedef FxEngine<32768, FORMAT_16_BIT> E;
@@ -171,6 +177,7 @@ class Reverb {
   float lp_decay_2_;
   
   uint16_t  buffer_[32768];
+  float freeze_;
 };
 
 }  // namespace daisysp

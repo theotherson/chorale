@@ -18,11 +18,11 @@ namespace chompi
         /* SING, knobs 1-3: stack (.5 = none), attack, release /
            strum (.5 = all at once), filter attack, filter decay -- must
            match Harmonizer::Init and FilterEnv::Init.
-           Knob 4: reverb/delay, bitcrush, doubler.
+           Knob 4: TEMPO's delay (.5 = off) and mix, bitcrush, doubler.
            Knob 6: volume / dry-wet (.5 = both full). The page 3 row keeps
            knob 6's input gain (Chompi key on page 2). */
-        {.5f, .1f, .5f, 0.f, .75f, .84f},  // page 1
-        {.5f, 0.f, .5f, 0.f, 0.f, .5f},    // page 2
+        {.5f, .1f, .5f, .5f, .75f, .84f},  // page 1
+        {.5f, 0.f, .5f, .5f, 0.f, .5f},    // page 2
         {0.f, 0.f, 0.f, 0.f, 0.f, .75f},   // page 3
         {0.f, 0.f, 0.f, 0.f, 0.f, 0.f},    // page 4
     };

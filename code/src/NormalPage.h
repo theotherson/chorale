@@ -175,7 +175,7 @@ namespace chompi
     /** knob 1 moves one stacked note per detent (6 each way) */
     static const float kStackStep = 1.f / 12.f;
 
-    static const uint8_t knob_num_pages[6] = {2, 2, 2, 3, 1, 2}; // SING: knob 4: reverb, crush, doubler
+    static const uint8_t knob_num_pages[6] = {2, 2, 2, 4, 1, 2}; // knob 4: TEMPO delay, mix, crush, doubler
 
     class NormalPage : public daisy::UiPage
     {
@@ -350,6 +350,13 @@ namespace chompi
                 }
             }
 
+            /* CHORALE: knob 4 held (as TEMPO) moves to its next page */
+            if (fx_press_ && now - fx_press_t_ > kFxHoldMs)
+            {
+                knob_page[3] = (knob_page[3] + 1) % knob_num_pages[3];
+                fx_press_    = false;
+            }
+
             /* SING: held keys magenta, stacked notes gold; the middle C dim amber and
                the outer Cs dimmer, for orientation. Idle markers stay off
                while the mic is monitored, as in TAPE. */
@@ -461,31 +468,21 @@ namespace chompi
                 }
                 case 3: // magic
                 {
-                    if (page == 0) // reverb / delay
-                    {   
-                        if (split_delay_) {
-                            if (value < .5) {
-                                fx_->SetReverb(0.f);
-                                fx_->SetDelayFeedback((.5f - value) * 2.f);
-                            }
-                            else {
-                                fx_->SetReverb((value - .5f) * 2.f);
-                                fx_->SetDelayFeedback(0.f);
-                            }
-
-                            // SING: blue, brighter either side of the centre
-                            const float lvl = .15f + .85f * fabsf(value - .5f) * 2.f;
-                            r = blue[0] * lvl; g = blue[1] * lvl; b = blue[2] * lvl;
-                        }
-                        else {
-                            fx_->SetReverb(value);
-                            fx_->SetDelayFeedback(value);
-
-                            const float lvl = .15f + .85f * value; // SING: blue
-                            r = blue[0] * lvl; g = blue[1] * lvl; b = blue[2] * lvl;
-                        }
+                    if (page == 0) // CHORALE: TEMPO's delay / reverb, in its colours
+                    {
+                        fx_->SetGranularMain(value);
+                        float c[3];
+                        fx_->GetGranularColors(c);
+                        r = c[0]; g = c[1]; b = c[2];
                     }
-                    else if (page == 1) // SING: bitcrush (TAPE: saturation), red
+                    else if (page == 1) // CHORALE: TEMPO's delay mix
+                    {
+                        fx_->SetGranularMix(value);
+                        r = color_triple_xfade(yellow[0], orange[0], red[0], value);
+                        g = color_triple_xfade(yellow[1], orange[1], red[1], value);
+                        b = color_triple_xfade(yellow[2], orange[2], red[2], value);
+                    }
+                    else if (page == 2) // SING: bitcrush (TAPE: saturation), red
                     {
                         fx_->SetCrush(value);
                         const float lvl = .15f + .85f * value;
@@ -700,9 +697,26 @@ namespace chompi
                 break;
 
             // encoder clicks, toggle pages
+            case static_cast<uint16_t>(Hardware::SwId::ENC_3_SW): // knob 4
+            {
+                /* CHORALE: as TEMPO. A short press on page 1 freezes the
+                   delay's buffer, elsewhere goes back to page 1; holding it
+                   (kFxHoldMs) moves to the next page (see Draw) */
+                fx_press_ = rising;
+                if(rising)
+                    fx_press_t_ = System::GetNow();
+                else if(System::GetNow() - fx_press_t_ < kFxHoldMs)
+                {
+                    if(knob_page[3] == 0)
+                        fx_->ToggleGranularFreeze();
+                    else
+                        knob_page[3] = 0;
+                }
+                break;
+            }
+
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // fall through
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // fall through
-            case static_cast<uint16_t>(Hardware::SwId::ENC_3_SW): // fall through
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // fall through
             {
                 if(!rising)
@@ -860,6 +874,10 @@ namespace chompi
                 {
                     inc = turns * 3.f * kEncoderCoarseStep; // SING: strum, as fast as knobs 2-3
                 }
+                else if(page == 0 && encoderID == 3)
+                {
+                    inc = turns * kEncoderFineStep; // CHORALE: TEMPO's delay, finely
+                }
                 else if((encoderID == 0 && page == 0 && quantized_pitch_)
                     || (encoderID == 4 && quantized_pitch_))
                 {
@@ -949,6 +967,11 @@ namespace chompi
         uint8_t* knob_page;
         bool quantized_pitch_;
         bool split_delay_;
+
+        /* CHORALE: knob 4 pressed, and when (TEMPO's hold for the next page) */
+        static constexpr uint32_t kFxHoldMs = 750;
+        bool     fx_press_   = false;
+        uint32_t fx_press_t_ = 0;
 
         /* SING: knob 6 held: input meter on the keys */
         static constexpr uint32_t kMeterHoldMs = 500;
