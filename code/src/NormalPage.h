@@ -235,11 +235,50 @@ namespace chompi
             {
                 case 0: fx_->SetStack(v); break;
                 case 1: fx_->SetStrum(v); break;
-                case 2: fx_->SetAttack(v); break;
-                case 3: fx_->SetFilterEnvAttack(v); break;
-                case 4: fx_->SetDecay(v); break; // the harmony release
-                case 5: fx_->SetFilterEnvDecay(v); break;
+                /* CHORALE: knobs 2-3 turn the thresholds and the filter;
+                   their envelopes are on the Chompi key (MenuPage) */
+                case 2: fx_->SetGate(v); break;             // input threshold
+                case 3: fx_->SetFilterEnvCutoff(v); break;  // filter cutoff
+                case 4: fx_->SetFreeze(v); break;           // freeze threshold
+                case 5: fx_->SetFilterEnvRes(v); break;     // filter resonance
                 default: break;
+            }
+        }
+
+        /** CHORALE: knob 2, page 1: the input threshold, live: magenta while
+         *  the voice is over it, dim coral under it, dark when off */
+        void InputThresholdColour(float v, float &r, float &g, float &b)
+        {
+            if (v <= 0.f)
+                r = g = b = 0.f;
+            else if (fx_->IsGateOpen())
+            {
+                r = sing_magenta[0]; g = sing_magenta[1]; b = sing_magenta[2];
+            }
+            else
+            {
+                const float lvl = .05f + .2f * v;
+                r = sing_coral[0] * lvl; g = sing_coral[1] * lvl; b = sing_coral[2] * lvl;
+            }
+        }
+
+        /** CHORALE: knob 3, page 1: the freeze threshold, live: white while
+         *  recording, magenta while the voice is over it, dim gold under
+         *  it, dark when off */
+        void FreezeThresholdColour(float v, float &r, float &g, float &b)
+        {
+            if (v <= 0.f)
+                r = g = b = 0.f;
+            else if (fx_->IsCapturing())
+                r = g = b = 1.f;
+            else if (fx_->IsOverFreeze())
+            {
+                r = sing_magenta[0]; g = sing_magenta[1]; b = sing_magenta[2];
+            }
+            else
+            {
+                const float lvl = .05f + .2f * v;
+                r = sing_gold[0] * lvl; g = sing_gold[1] * lvl; b = sing_gold[2] * lvl;
             }
         }
 
@@ -275,10 +314,8 @@ namespace chompi
                     lvl = .35f + .65f * fabsf(d);
                     break;
                 }
-                case 2: c = yellow; lvl = .15f + .85f * v; break; // amp attack
-                case 4: c = deep_orange; lvl = .15f + .85f * v; break; // amp release
-                case 3: c = purple; lvl = .15f + .85f * v; break; // filter attack
-                case 5: c = blue;   lvl = .15f + .85f * v; break; // filter decay
+                case 3: c = green; lvl = .15f + .85f * v; break;       // filter cutoff
+                case 5: c = pale_yellow; lvl = .15f + .85f * v; break; // filter resonance
                 default: break;
             }
             r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
@@ -478,6 +515,11 @@ namespace chompi
                         on |= preview[k] == float(key_map[i]) - 60.f;
                     if (on)
                         SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
+                    else if (c_key) // the root stays marked under the preview
+                    {
+                        const float dim = key_map[i] == 60 + tonic ? .3f : .1f;
+                        SetSmtLedFloat(led_map[i], sing_amber[0] * dim, sing_amber[1] * dim, sing_amber[2] * dim);
+                    }
                     else
                         SetSmtLed(led_map[i], 0, 0, 0);
                 }
@@ -507,6 +549,10 @@ namespace chompi
                 {
                     if (fx_->IsSliceMode())
                         SliceKnobColour(i, page, fx_->GetSliceKnob(page, i), r, g, b); // CHORALE
+                    else if (page == 0 && i == 1)
+                        InputThresholdColour(value, r, g, b);  // CHORALE: live
+                    else if (page == 0 && i == 2)
+                        FreezeThresholdColour(value, r, g, b); // CHORALE: live
                     else if (i == 0 && page == 0 && fx_->IsChordMode())
                         ChordColour(fx_->GetChordType(), r, g, b); // CHORALE
                     else

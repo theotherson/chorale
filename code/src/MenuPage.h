@@ -44,11 +44,12 @@ namespace chompi
 
             /* SING: what the Chompi key sets on knobs 2-4; the engine's
                Init (Harmonizer, FilterEnv) starts from the same values */
-            onset_   = .4f;
-            freeze_  = 0.f;
+            /* CHORALE: the envelopes, on the Chompi key with knobs 2-3 */
+            amp_attack_  = .1f;
+            amp_release_ = .5f;
             glide_   = 0.f;
-            cutoff_  = 1.f;
-            env_res_ = 0.f;
+            f_attack_    = 0.f;
+            f_decay_     = .5f;
             spread_  = 0.f;
         }
 
@@ -194,53 +195,19 @@ namespace chompi
                     const float lvl = float(fx_->GetSliceCount()) / 16.f;
                     SetPthLedFloat(2, yellow[0] * lvl, yellow[1] * lvl, yellow[2] * lvl);
                 }
-                else if(knob_page[1] == 0)
+                else // CHORALE: knob 2: attack yellow / filter attack purple
                 {
-                    /* knob 2: input threshold, shown live: magenta while
-                       the voice is over it, dim coral under it, dark off */
-                    if(onset_ <= 0.f)
-                        r = g = b = 0.f;
-                    else if(fx_->IsGateOpen())
-                    {
-                        r = sing_magenta[0]; g = sing_magenta[1]; b = sing_magenta[2];
-                    }
-                    else
-                    {
-                        const float lvl = .05f + .2f * onset_;
-                        r = sing_coral[0] * lvl; g = sing_coral[1] * lvl; b = sing_coral[2] * lvl;
-                    }
-                    SetPthLedFloat(2, r, g, b);
-                }
-                else // knob 2: filter cutoff, green
-                {
-                    const float lvl = fx_->IsFilterEnvOn() ? .15f + .85f * cutoff_ : 0.f;
-                    SetPthLedFloat(2, green[0] * lvl, green[1] * lvl, green[2] * lvl);
+                    const float *c   = knob_page[1] == 0 ? yellow : purple;
+                    const float  v   = knob_page[1] == 0 ? amp_attack_ : f_attack_;
+                    const float  lvl = .15f + .85f * v;
+                    SetPthLedFloat(2, c[0] * lvl, c[1] * lvl, c[2] * lvl);
                 }
 
-                if(knob_page[2] == 0)
-                {
-                    /* knob 3: freeze threshold, shown live: white while
-                       recording, magenta while the voice is over it, dim
-                       gold under it, dark with freeze off */
-                    if(freeze_ <= 0.f || !fx_->IsFreezeOn())
-                        r = g = b = 0.f;
-                    else if(fx_->IsCapturing())
-                        r = g = b = 1.f;
-                    else if(fx_->IsOverFreeze())
-                    {
-                        r = sing_magenta[0]; g = sing_magenta[1]; b = sing_magenta[2];
-                    }
-                    else
-                    {
-                        const float lvl = .05f + .2f * freeze_;
-                        r = sing_gold[0] * lvl; g = sing_gold[1] * lvl; b = sing_gold[2] * lvl;
-                    }
-                    SetPthLedFloat(3, r, g, b);
-                }
-                else // knob 3: filter resonance, pale yellow
-                {
-                    const float lvl = .15f + .85f * env_res_;
-                    SetPthLedFloat(3, pale_yellow[0] * lvl, pale_yellow[1] * lvl, pale_yellow[2] * lvl);
+                {   // CHORALE: knob 3: release deep orange / filter decay blue
+                    const float *c   = knob_page[2] == 0 ? deep_orange : blue;
+                    const float  v   = knob_page[2] == 0 ? amp_release_ : f_decay_;
+                    const float  lvl = .15f + .85f * v;
+                    SetPthLedFloat(3, c[0] * lvl, c[1] * lvl, c[2] * lvl);
                 }
 
                 /* SING: the on/off press shows for a moment: white on, dim off */
@@ -351,13 +318,15 @@ namespace chompi
 
             if(encoderID == 1 || encoderID == 2)
             {
-                float &val = page == 0 ? (encoderID == 1 ? onset_ : freeze_)
-                                       : (encoderID == 1 ? cutoff_ : env_res_);
+                /* CHORALE: the envelopes: page 1 the harmonies' attack and
+                   release, page 2 the filter's attack and decay */
+                float &val = page == 0 ? (encoderID == 1 ? amp_attack_ : amp_release_)
+                                       : (encoderID == 1 ? f_attack_ : f_decay_);
                 val = fclamp(val + inc, 0.f, 1.f);
-                if(page == 0 && encoderID == 1)      fx_->SetGate(val);
-                else if(page == 0)                   fx_->SetFreeze(val);
-                else if(encoderID == 1)              fx_->SetFilterEnvCutoff(val);
-                else                                 fx_->SetFilterEnvRes(val);
+                if(page == 0 && encoderID == 1)      fx_->SetAttack(val);
+                else if(page == 0)                   fx_->SetDecay(val); // the release
+                else if(encoderID == 1)              fx_->SetFilterEnvAttack(val);
+                else                                 fx_->SetFilterEnvDecay(val);
                 return true;
             }
 
@@ -477,14 +446,14 @@ namespace chompi
                     ResetSliceKnob(1);
                 else if(rising) // CHORALE: everything on knob 2 back to its defaults
                 {
-                    enc_values[0][1] = enc_defaults[0][1];
-                    enc_values[1][1] = enc_defaults[1][1];
-                    fx_->SetAttack(enc_values[0][1]);
-                    fx_->SetFilterEnvAttack(enc_values[1][1]);
-                    onset_  = .4f;
-                    cutoff_ = 1.f;
-                    fx_->SetGate(onset_);
-                    fx_->SetFilterEnvCutoff(cutoff_);
+                    enc_values[0][1] = enc_defaults[0][1]; // input threshold
+                    enc_values[1][1] = enc_defaults[1][1]; // filter cutoff
+                    fx_->SetGate(enc_values[0][1]);
+                    fx_->SetFilterEnvCutoff(enc_values[1][1]);
+                    amp_attack_ = .1f;
+                    f_attack_   = 0.f;
+                    fx_->SetAttack(amp_attack_);
+                    fx_->SetFilterEnvAttack(f_attack_);
                     Flash(1);
                 }
                 break;
@@ -494,14 +463,14 @@ namespace chompi
                     ResetSliceKnob(2);
                 else if(rising) // CHORALE: everything on knob 3 back to its defaults
                 {
-                    enc_values[0][2] = enc_defaults[0][2];
-                    enc_values[1][2] = enc_defaults[1][2];
-                    fx_->SetDecay(enc_values[0][2]);
-                    fx_->SetFilterEnvDecay(enc_values[1][2]);
-                    freeze_  = 0.f;
-                    env_res_ = 0.f;
-                    fx_->SetFreeze(freeze_);
-                    fx_->SetFilterEnvRes(env_res_);
+                    enc_values[0][2] = enc_defaults[0][2]; // freeze threshold
+                    enc_values[1][2] = enc_defaults[1][2]; // filter resonance
+                    fx_->SetFreeze(enc_values[0][2]);
+                    fx_->SetFilterEnvRes(enc_values[1][2]);
+                    amp_release_ = .5f;
+                    f_decay_     = .5f;
+                    fx_->SetDecay(amp_release_);
+                    fx_->SetFilterEnvDecay(f_decay_);
                     Flash(2);
                 }
                 break;
@@ -696,7 +665,7 @@ namespace chompi
         uint32_t last_blink;
 
         float grain_alt_, grain_fb_, resonance, warble; // CHORALE: TEMPO's delay controls
-        float onset_, freeze_, cutoff_, env_res_, spread_, glide_; // SING
+        float amp_attack_, amp_release_, f_attack_, f_decay_, spread_, glide_; // SING
 
         /* SING: a press of knob 2 / 3 shows its ring white (on) or dim
            white (off) for kFlashMs */
