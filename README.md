@@ -22,7 +22,7 @@ function: hold the Chompi key and turn.
 
 | Knob | Page 1 | Chompi key + turn | Page 2 | Chompi key + turn |
 |---|---|---|---|---|
-| 1 | notes mode: **stack interval** (centre: none; right: 3rd, 4th, 5th, 6th, octave above; left: the same below) · chord mode: **chord type** | notes mode: **how many** stacked notes (1–6, default 2) · chord mode: **voicing** (close, 1st, 2nd, 3rd inversion, open) | **strum**: centre all at once; right upward, left downward; further out, longer gap (up to 500 ms) | **glide** |
+| 1 | notes mode: **stack interval** (centre: none; right: 3rd, 4th, 5th, 6th, octave above; left: the same below) · chord mode: **chord type** | notes mode: **how many** stacked notes (1–6, default 1) · chord mode: **voicing** (close, 1st, 2nd, 3rd inversion, open) | **strum**: centre all at once; right upward, left downward; further out, longer gap (up to 500 ms) | **glide** |
 | 2 | **input threshold**, −48…−8 dB (default −32; fully left: off); its ring is live | harmony **attack**, 2 ms…500 ms | filter **cutoff**, 40 Hz…16 kHz (fully open: off) | filter envelope **attack**, 1 ms…2 s |
 | 3 | **freeze threshold**, −45…−5 dB (fully left: off); its ring is live | harmony **release**, 20 ms…3 s (default 1.5 s); fully right: never fade, ring red | filter **resonance** | filter envelope **decay**, 10 ms…5 s (default ≈ 0.2 s) |
 | 4 | four pages: TEMPO's **delay/reverb** (left: random delay; centre: off; right: reverb delay) · its **mix** · **bitcrush** · **doubler** | randomness · feedback · output compression · warble | | |
@@ -33,7 +33,7 @@ function: hold the Chompi key and turn.
 
 | Knob | |
 |---|---|
-| 1 | back to its defaults: no stack, 2 notes, close voicing (page 2: strum back to the centre) |
+| 1 | back to its defaults: no stack, 1 note, close voicing (page 2: strum back to the centre) |
 | 2 | everything on knob 2 back to its defaults (input threshold, attack, cutoff, filter attack) |
 | 3 | everything on knob 3 back to its defaults (freeze threshold, release, resonance, filter decay) |
 | 4 | reset the effects: delay, mix, randomness, feedback, bitcrush, doubler, compression, warble |
@@ -41,9 +41,12 @@ function: hold the Chompi key and turn.
 
 **Hold knob 6** for an input meter across the keys (green, yellow from −12 dB, red from −4 dB).
 
-**Toggle switch: notes or chords.** In one position each key plays one note (**notes mode**);
-in the other (the one that turned TAPE's mic monitor off) each key plays a whole chord
-(**chord mode**). Either way, notes fade with the release when you let go.
+**Toggle switch: harmonies or slices.** In one position the keys play harmonies; in the other
+(the one that turned TAPE's mic monitor off) they play the loop's slices (**slice mode**, below).
+
+**Notes or chords** (Chompi key + the F# below the middle C): each key plays one note (**notes
+mode**, the default) or a whole chord (**chord mode**, F# magenta). Either way, notes fade with
+the release when you let go.
 
 **Chompi key + a key:**
 
@@ -52,7 +55,7 @@ in the other (the one that turned TAPE's mic monitor off) each key plays a whole
 | upper octave, middle C to B | the **root** (light orange; the selected one pink) |
 | lower white keys, C to B | the **scale**: major, minor, dorian, mixolydian, harmonic minor, major pentatonic, minor pentatonic (green; the selected one bright) |
 | lowest C# / D# | chord mode's **octave**, down / up (−2…+2; both together: back to 0); lit while shifted |
-| F# below the middle C | **slice mode** on / off (yellow when on) |
+| F# below the middle C | **chord mode** on / off (magenta when on) |
 | G# below the middle C | **input**: each press steps mic (warm white), line (teal), resample (purple) |
 | A# below the middle C | **effects before / after the looper** (blue: bright before, dim after) |
 
@@ -136,12 +139,11 @@ TEMPO's granular delay follows the same clock.
 
 ## Slice mode (vocal chops)
 
-TEMPO's slice engine, on the looper: record a loop as usual, then hold the Chompi key and press
-the F# below the middle C. The keys now play the loop cut into 16 equal slices, one per white key
+TEMPO's slice engine, on the looper: record a loop as usual, then flip the toggle switch. The keys now play the loop cut into 16 equal slices, one per white key
 from the lowest C (the top C plays the last two in turn); a sounding slice lights white, the
 others dim yellow. Slices read the loop where it lies, so overdubs show up in them at once, and
-they go through the effects (and into the looper when recording) like the harmonies. Press the
-F# again for harmonies.
+they go through the effects (and into the looper when recording) like the harmonies. Flip the
+switch back for harmonies.
 
 In slice mode knobs 1-3 are TEMPO's slice controls, kept apart from the harmony settings:
 
@@ -156,9 +158,8 @@ white keys). Chompi key + press knob 1-3 resets that knob's slice settings.
 
 ## Input and resample
 
-Hold the Chompi key and press a black key below the middle C: **F#** built-in mic, **G#** line in
-(plugging into the input jack selects it), **A#** resample. These keys, and C# / D# above the middle C (effects before or after the looper), keep their
-menu jobs instead of setting the root; every note also has a free key in the other octave.
+Hold the Chompi key and press the **G#** below the middle C to step the input: built-in mic,
+line in (plugging into the input jack selects it), resample.
 
 In **resample** mode the harmonies play from the **loop** instead of your voice: record a loop,
 select resample, and each held key adds a pitch-shifted copy of it, with stack, strum, glide,

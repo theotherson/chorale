@@ -648,7 +648,7 @@ namespace daisy
         void SetStackInterval(int idx) { harmonizer.SetInterval(idx); }
         void SetStackNotes(int n) { harmonizer.SetStackNotes(n); }
 
-        /* CHORALE: slice mode (Chompi key + F# below the middle C): the keys
+        /* CHORALE: slice mode (the toggle switch): the keys
            play the loop's 16 slices instead of harmonies */
         void SetSliceMode(bool on)
         {

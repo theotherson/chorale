@@ -224,7 +224,7 @@ namespace chompi
                Upper octave (middle C to B): the root, light orange, the
                selected one pink. Lower white keys: the scale, green, the
                selected one bright. Lowest C# / D#: chord octave down / up,
-               lit while shifted. F# below the middle C: slice mode (yellow
+               lit while shifted. F# below the middle C: chord mode (magenta
                when on). G#: the
                input (mic warm white, line teal, resample purple). A#:
                effects routing, blue, bright before the looper, dim after.
@@ -250,10 +250,10 @@ namespace chompi
                         const float lvl   = shift >= 2 ? 1.f : shift == 1 ? .5f : .05f;
                         r = g = b = lvl;
                     }
-                    else if (note == 54) // slice mode: yellow, dim when off
+                    else if (note == 54) // chord mode: magenta, dim when off
                     {
-                        const float lvl = fx_->IsSliceMode() ? 1.f : .08f;
-                        r = yellow[0] * lvl; g = yellow[1] * lvl; b = yellow[2] * lvl;
+                        const float lvl = fx_->IsChordMode() ? 1.f : .08f;
+                        r = sing_magenta[0] * lvl; g = sing_magenta[1] * lvl; b = sing_magenta[2] * lvl;
                     }
                     else if (note == 56) // input
                     {
@@ -425,7 +425,7 @@ namespace chompi
                     {
                         enc_values[0][0] = enc_defaults[0][0];
                         fx_->SetStack(enc_values[0][0]);
-                        fx_->SetStackNotes(2);
+                        fx_->SetStackNotes(1);
                         fx_->SetVoicing(0);
                         Flash(0);
                     }
@@ -521,7 +521,7 @@ namespace chompi
                 break;
 
             /* CHORALE: lowest C# / D#: chord octave down / up (both:
-               back to 0); F# below the middle C: reserved; G#: next input;
+               back to 0); F# below the middle C: chord mode; G#: next input;
                A#: effects before / after the looper. Releases fall through. */
             case static_cast<uint16_t>(Hardware::SwId::KEY_16):
             case static_cast<uint16_t>(Hardware::SwId::KEY_17):
@@ -537,10 +537,10 @@ namespace chompi
                 break;
             }
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // slice mode on / off
+            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // chord mode on / off
                 if(!rising)
                     return false;
-                fx_->SetSliceMode(!fx_->IsSliceMode());
+                fx_->SetChordMode(!fx_->IsChordMode());
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_19): // input: mic, line, resample

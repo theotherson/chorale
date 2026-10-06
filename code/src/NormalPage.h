@@ -993,14 +993,14 @@ namespace chompi
             return true;
         }
 
-        /** CHORALE: the toggle switch is chord mode. Compared with the engine
+        /** CHORALE: the toggle switch is slice mode. Compared with the engine
          *  on every call rather than on a change of the switch: the UI starts
          *  before the engine, whose Init() would otherwise undo the mode the
          *  switch was already in at power-on. */
         void SetSwitchState(bool state)
         {
-            if (fx_->IsChordMode() != state)
-                fx_->SetChordMode(state);
+            if (fx_->IsSliceMode() != state)
+                fx_->SetSliceMode(state);
             switch_state = state; 
         }
 

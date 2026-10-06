@@ -25,7 +25,7 @@ fits together, and two lessons:
    callback (CHORALE's libDaisy has no timer to spare). Tempo is TEMPO's default until step 3.
 2. **The slice engine** (vocal chops). Done (`SliceEngine.h`, TEMPO's `samplePlayer` in
    `SamplePlayer.h`); needs a hardware check. Source: whatever the looper has recorded, cut into 16
-   slices on the white keys. Chompi key + F# below the middle C (reserved for it) flips the keys
+   slices on the white keys. the toggle switch flips the keys
    between harmonies and slices. In slice mode, knobs 1-3 are TEMPO's slice controls.
 3. **The sequencer and arpeggiator**, on TEMPO's clock. Done (`Sequencer.h`, after TEMPO's
    ArpeggiatorSequencer): play runs it; the wheel is tempo / rate / latch, Chompi + click tap
@@ -35,10 +35,10 @@ fits together, and two lessons:
 
 ## Decided controls
 
-See the README. In short: the switch is notes / chord mode; knob 1 is the stack (interval and
+See the README. In short: the switch is harmonies / slices; knob 1 is the stack (interval and
 direction; Chompi: how many) or the chord type (Chompi: voicing); Chompi key + upper octave is
 the root, + lower white keys the scale, + lowest C# / D# the chord octave, + G# the input, + A#
-the effects routing, + F# reserved for slices / sequence; the top C is free.
+the effects routing, + F# notes / chord mode; the top C is free.
 
 ## Open
 

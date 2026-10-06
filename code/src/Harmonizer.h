@@ -127,7 +127,7 @@ namespace chompi
             voicing_      = 0;
             chord_octave_ = 0;
             stack_pos_    = 0;
-            stack_notes_  = 2;
+            stack_notes_  = 1;
             chord_new_  = false;
             n_held_     = 0;
             scale_      = 0;
