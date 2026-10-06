@@ -11,6 +11,7 @@
 #include "MicFilter.h"
 #include "Harmonizer.h"
 #include "FilterEnv.h"
+#include "SliceEngine.h" // CHORALE: TEMPO's vocal chops on the looper
 
 /* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
@@ -176,6 +177,9 @@ namespace daisy
 
             /* looper */
             looper.Init(samplerate, loop_buff, tape_slew);
+            loop_mem_ = loop_buff;
+            slices_.Init(samplerate);
+            slice_mode_ = false;
 
             /** Final output compressors */
             lim_hp_l_.Init();
@@ -397,6 +401,10 @@ namespace daisy
                 out[1][i] = filter_env_.Process(FilterEnv::HARM_R, i, out[1][i] * wet[i]);
             }
 
+            /* CHORALE: the slices of the loop, as it is now */
+            slices_.SetSource(loop_mem_->mem, loop_mem_->length / 2);
+            slices_.Process(out[0], out[1], size);
+
             for(size_t i = 0; i < size; i++)
             {
                 out[0][i] = daisysp::SoftClip(out[0][i]);
@@ -563,7 +571,14 @@ namespace daisy
                 /* SING: keys play harmony voices of the live
                    input instead of samples. transpose_nn_ is the key's
                    distance from the middle C in semitones. */
-                if (req.type_ == KeyRequest::Type::START)
+                if (slice_mode_) // CHORALE: or the loop's slices
+                {
+                    if (req.type_ == KeyRequest::Type::START)
+                        slices_.NoteOn(req.key_, int(lroundf(req.transpose_nn_)) + 60);
+                    else if (req.type_ == KeyRequest::Type::STOP)
+                        slices_.NoteOff(req.key_);
+                }
+                else if (req.type_ == KeyRequest::Type::START)
                     harmonizer.NoteOn(req.key_, req.transpose_nn_);
                 else if (req.type_ == KeyRequest::Type::STOP)
                     harmonizer.NoteOff(req.key_);
@@ -599,6 +614,36 @@ namespace daisy
         bool IsGateOpen() { return harmonizer.GateOpen(); }
         void SetStackInterval(int idx) { harmonizer.SetInterval(idx); }
         void SetStackNotes(int n) { harmonizer.SetStackNotes(n); }
+
+        /* CHORALE: slice mode (Chompi key + F# below the middle C): the keys
+           play the loop's 16 slices instead of harmonies */
+        void SetSliceMode(bool on)
+        {
+            harmonizer.AllOff();
+            slices_.AllOff();
+            slice_mode_ = on;
+        }
+        bool IsSliceMode() const { return slice_mode_; }
+        bool HasSlices() const { return slices_.HasSource(); }
+        bool IsSlicePlaying(int key) const { return slices_.Playing(key); }
+
+        /** knobs 1-3 in slice mode: page 1 pitch, start, end; page 2
+         *  volume, attack, release */
+        void SetSliceKnob(int page, int knob, float v)
+        {
+            slice_vals_[page][knob] = v;
+            switch (page * 3 + knob)
+            {
+                case 0: slices_.SetPitch(v); break;
+                case 1: slices_.SetStart(v); break;
+                case 2: slices_.SetEnd(v); break;
+                case 3: slices_.SetVolume(v); break;
+                case 4: slices_.SetAttack(v); break;
+                case 5: slices_.SetRelease(v); break;
+                default: break;
+            }
+        }
+        float GetSliceKnob(int page, int knob) const { return slice_vals_[page][knob]; }
         int GetStackNotes() { return harmonizer.StackNotes(); }
         int StackPreview(float root, float *notes) { return harmonizer.StackPreview(root, notes); }
         void SetVoicing(int v) { harmonizer.SetVoicing(v); }
@@ -870,6 +915,10 @@ namespace daisy
         float mgain_, mgain_target_;
         float dry_, dry_target_, wet_, wet_target_; // SING: dry/wet
         FilterEnv filter_env_;                      // SING: knobs 2-3, page 2
+        SliceEngine      slices_;                   // CHORALE: slice mode
+        RamBufferMemory *loop_mem_;
+        bool             slice_mode_;
+        float            slice_vals_[2][3] = {{.5f, 0.f, 1.f}, {.6f, 0.f, .2f}};
         const float *dry_buf_ = nullptr;            // this block's dry gain
 
         /* SING: resample mode harmonizes the loop: its playback from the

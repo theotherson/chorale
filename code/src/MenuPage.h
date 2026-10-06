@@ -262,7 +262,8 @@ namespace chompi
                Upper octave (middle C to B): the root, light orange, the
                selected one pink. Lower white keys: the scale, green, the
                selected one bright. Lowest C# / D#: chord octave down / up,
-               lit while shifted. F# below the middle C: reserved. G#: the
+               lit while shifted. F# below the middle C: slice mode (yellow
+               when on). G#: the
                input (mic warm white, line teal, resample purple). A#:
                effects routing, blue, bright before the looper, dim after.
                The top C: unused. */
@@ -286,6 +287,11 @@ namespace chompi
                         const int   shift = note == 49 ? -octave : octave;
                         const float lvl   = shift >= 2 ? 1.f : shift == 1 ? .5f : .05f;
                         r = g = b = lvl;
+                    }
+                    else if (note == 54) // slice mode: yellow, dim when off
+                    {
+                        const float lvl = fx_->IsSliceMode() ? 1.f : .08f;
+                        r = yellow[0] * lvl; g = yellow[1] * lvl; b = yellow[2] * lvl;
                     }
                     else if (note == 56) // input
                     {
@@ -450,6 +456,11 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
+                if(rising && fx_->IsSliceMode()) // CHORALE: slice mode: its own reset
+                {
+                    ResetSliceKnob(0);
+                    break;
+                }
                 if(rising) // CHORALE: knob 1 back to its defaults (page 2: strum to the centre)
                 {
                     if(knob_page[0] == 0)
@@ -473,7 +484,9 @@ namespace chompi
                 return false;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
-                if(rising) // CHORALE: everything on knob 2 back to its defaults
+                if(rising && fx_->IsSliceMode())
+                    ResetSliceKnob(1);
+                else if(rising) // CHORALE: everything on knob 2 back to its defaults
                 {
                     enc_values[0][1] = enc_defaults[0][1];
                     enc_values[1][1] = enc_defaults[1][1];
@@ -488,7 +501,9 @@ namespace chompi
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // knob 3
-                if(rising) // CHORALE: everything on knob 3 back to its defaults
+                if(rising && fx_->IsSliceMode())
+                    ResetSliceKnob(2);
+                else if(rising) // CHORALE: everything on knob 3 back to its defaults
                 {
                     enc_values[0][2] = enc_defaults[0][2];
                     enc_values[1][2] = enc_defaults[1][2];
@@ -562,9 +577,10 @@ namespace chompi
                 break;
             }
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // reserved: slice / sequence
+            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // slice mode on / off
                 if(!rising)
                     return false;
+                fx_->SetSliceMode(!fx_->IsSliceMode());
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::KEY_19): // input: mic, line, resample
@@ -681,6 +697,15 @@ namespace chompi
         /* SING: a press of knob 2 / 3 shows its ring white (on) or dim
            white (off) for kFlashMs */
         static constexpr uint32_t kFlashMs = 500;
+        /** CHORALE: slice mode: knob 1-3 back to its slice defaults */
+        void ResetSliceKnob(int knob)
+        {
+            static const float kDefaults[2][3] = {{.5f, 0.f, 1.f}, {.6f, 0.f, .2f}};
+            for (int pg = 0; pg < 2; pg++)
+                fx_->SetSliceKnob(pg, knob, kDefaults[pg][knob]);
+            Flash(knob);
+        }
+
         /** a knob reset shows white on its ring for a moment */
         void Flash(int knob)
         {

@@ -167,6 +167,35 @@ namespace chompi
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
 
+    /** CHORALE: knobs 1-3 in slice mode, in TEMPO's colours */
+    static inline void SliceKnobColour(int knob, int page, float v, float &r, float &g, float &b)
+    {
+        switch(page * 3 + knob)
+        {
+            case 0: // pitch: blue at the centre, through green and yellow to red outwards
+            {
+                const float idx = v < .5f ? (.5f - v) * 2.f : (v - .5f) * 2.f;
+                r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
+                g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
+                b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
+                return;
+            }
+            case 1: SingMix(yellow, orange, v, r, g, b); return; // start
+            case 2: SingMix(orange, red, v, r, g, b); return;    // end
+            case 3: // volume
+                r = color_triple_xfade(blue[0], pink[0], red[0], v);
+                g = color_triple_xfade(blue[1], pink[1], red[1], v);
+                b = color_triple_xfade(blue[2], pink[2], red[2], v);
+                return;
+            default: // attack, release: purple, brighter as it turns up
+            {
+                const float lvl = .2f + .8f * v;
+                r = purple[0] * lvl; g = purple[1] * lvl; b = purple[2] * lvl;
+                return;
+            }
+        }
+    }
+
     /** CHORALE: knob 1 ring in chord mode, one hue per chord type */
     static inline void ChordColour(int idx, float &r, float &g, float &b)
     {
@@ -411,6 +440,18 @@ namespace chompi
                         SetSmtLed(led_map[i], 0, 0, 0);
                     continue;
                 }
+                /* CHORALE: slice mode: a sounding slice white, the white
+                   keys dim yellow while the loop has slices */
+                if (fx_->IsSliceMode())
+                {
+                    if (fx_->IsSlicePlaying(int(i)))
+                        SetSmtLedFloat(led_map[i], 1.f, 1.f, 1.f);
+                    else if (fx_->HasSlices() && WhiteKeyIndex(key_map[i]) >= 0)
+                        SetSmtLedFloat(led_map[i], yellow[0] * .15f, yellow[1] * .15f, yellow[2] * .15f);
+                    else
+                        SetSmtLed(led_map[i], 0, 0, 0);
+                    continue;
+                }
                 /* CHORALE: the tonic marks the keyboard, as the Cs did */
                 const bool c_key = ((key_map[i] - 60 - tonic) % 12 + 12) % 12 == 0;
                 const int  w     = WhiteKeyIndex(key_map[i]); // 0..14, -1 black
@@ -452,7 +493,9 @@ namespace chompi
                 case 1:
                 case 2:
                 {
-                    if (i == 0 && page == 0 && fx_->IsChordMode())
+                    if (fx_->IsSliceMode())
+                        SliceKnobColour(i, page, fx_->GetSliceKnob(page, i), r, g, b); // CHORALE
+                    else if (i == 0 && page == 0 && fx_->IsChordMode())
                         ChordColour(fx_->GetChordType(), r, g, b); // CHORALE
                     else
                         SingKnobColour(i, page, value, r, g, b);
@@ -813,6 +856,20 @@ namespace chompi
 
             uint8_t page = knob_page[encoderID];
             float old_val = enc_values[page][encoderID];
+
+            /* CHORALE: slice mode: knobs 1-3 are TEMPO's slice controls
+               (page 1 pitch, start, end, finely; page 2 volume, attack,
+               release), kept apart from the harmony settings */
+            if(encoderID <= 2 && fx_->IsSliceMode())
+            {
+                float v = fx_->GetSliceKnob(page, encoderID);
+                if(stepsPerRevolution > 0)
+                    v = turns / 127.f;
+                else
+                    v += turns * (page == 0 ? kEncoderFineStep : kEncoderCoarseStep);
+                fx_->SetSliceKnob(page, encoderID, fclamp(v, 0.f, 1.f));
+                return true;
+            }
 
             /* CHORALE: in chord mode knob 1 (page 1) picks the chord type, one
                per detent, and previews it on the keys */

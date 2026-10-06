@@ -52,7 +52,7 @@ in the other (the one that turned TAPE's mic monitor off) each key plays a whole
 | upper octave, middle C to B | the **root** (light orange; the selected one pink) |
 | lower white keys, C to B | the **scale**: major, minor, dorian, mixolydian, harmonic minor, major pentatonic, minor pentatonic (green; the selected one bright) |
 | lowest C# / D# | chord mode's **octave**, down / up (−2…+2; both together: back to 0); lit while shifted |
-| F# below the middle C | reserved (slice / sequence, coming) |
+| F# below the middle C | **slice mode** on / off (yellow when on) |
 | G# below the middle C | **input**: each press steps mic (warm white), line (teal), resample (purple) |
 | A# below the middle C | **effects before / after the looper** (blue: bright before, dim after) |
 
@@ -113,6 +113,25 @@ Lower the cutoff (Chompi key + knob 2, page 2) to bring it in. One low-pass filt
 voice and the harmonies, before the effects and looper. Each time a harmony note enters (a key,
 a stacked note, each step of a strum, a new phrase through the input threshold), the cutoff
 sweeps up to fully open and back down.
+
+## Slice mode (vocal chops)
+
+TEMPO's slice engine, on the looper: record a loop as usual, then hold the Chompi key and press
+the F# below the middle C. The keys now play the loop cut into 16 equal slices, one per white key
+from the lowest C (the top C plays the last two in turn); a sounding slice lights white, the
+others dim yellow. Slices read the loop where it lies, so overdubs show up in them at once, and
+they go through the effects (and into the looper when recording) like the harmonies. Press the
+F# again for harmonies.
+
+In slice mode knobs 1-3 are TEMPO's slice controls, kept apart from the harmony settings:
+
+| Knob | Page 1 | Page 2 |
+|---|---|---|
+| 1 | **pitch / speed**, an octave each way (centre: as recorded) | **volume** |
+| 2 | **start** of the sliced part of the loop | slice **attack**, 1 ms…1 s |
+| 3 | **end** of the sliced part | slice **release**, 5 ms…2 s |
+
+Chompi key + press knob 1-3 resets that knob's slice settings.
 
 ## Input and resample
 
