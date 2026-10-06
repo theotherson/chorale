@@ -142,16 +142,28 @@ namespace chompi
         bl = a[2] + (b[2] - a[2]) * t;
     }
 
+    /** the stacked interval, one colour each (3rds .. octaves); also the
+     *  chord voicings in the menu */
+    static const float kIntervalColours[5][3] = {
+        {1.f, .78f, .10f}, // 3rds: gold
+        {1.f, .55f, 0.f},  // 4ths: amber
+        {1.f, .42f, .30f}, // 5ths: coral
+        {1.f, .45f, .60f}, // 6ths: rose
+        {1.f, .85f, .65f}, // octaves: warm white
+    };
+
+    /** knob 1 (notes mode): dim warm white with nothing stacked, else the
+     *  interval's colour, full above, dimmer below */
     static inline void SingStackColour(float v, float &r, float &g, float &b)
     {
-        const int n = Harmonizer<kMaxPoly>::StackCount(v);
-        if (n == 0)
+        const int p = Harmonizer<kMaxPoly>::StackPos(v);
+        if (p == 0)
         {
-            r = sing_warm[0]; g = sing_warm[1]; b = sing_warm[2];
+            r = sing_warm[0] * .4f; g = sing_warm[1] * .4f; b = sing_warm[2] * .4f;
             return;
         }
-        const float *c   = n < 0 ? sing_coral : sing_gold;
-        const float  lvl = .35f + .65f * fabsf(float(n)) / 6.f;
+        const float *c   = kIntervalColours[(p < 0 ? -p : p) - 1];
+        const float  lvl = p > 0 ? 1.f : .35f;
         r = c[0] * lvl; g = c[1] * lvl; b = c[2] * lvl;
     }
 
@@ -173,7 +185,7 @@ namespace chompi
     }
 
     /** knob 1 moves one stacked note per detent (6 each way) */
-    static const float kStackStep = 1.f / 12.f;
+    static const float kStackStep = 1.f / 10.f; // one interval per detent, 5 each way
 
     static const uint8_t knob_num_pages[6] = {2, 2, 2, 4, 1, 2}; // knob 4: TEMPO delay, mix, crush, doubler
 
@@ -350,13 +362,6 @@ namespace chompi
                 }
             }
 
-            /* CHORALE: knob 4 held (as TEMPO) moves to its next page */
-            if (fx_press_ && now - fx_press_t_ > kFxHoldMs)
-            {
-                knob_page[3] = (knob_page[3] + 1) % knob_num_pages[3];
-                fx_press_    = false;
-            }
-
             /* SING: held keys magenta, stacked notes gold; the middle C dim amber and
                the outer Cs dimmer, for orientation. Idle markers stay off
                while the mic is monitored, as in TAPE. */
@@ -371,17 +376,15 @@ namespace chompi
                on the tonic instead */
             float       preview[kMaxPoly];
             int         n_preview = 0;
+            /* CHORALE: turning knob 1 previews what it does: the stack on
+               a held middle C, or the chord type built on the root */
             if (show_value)
             {
-                const float v = enc_values[0][0];
-                const int n = Harmonizer<kMaxPoly>::StackCount(v);
-                bar_lo = n < 0 ? (7 + n) / 15.f : 8 / 15.f;
-                bar_hi = n < 0 ? 7 / 15.f : (8 + n) / 15.f;
                 const float fade = shown_age < kShowMs - 400 ? 1.f
                                    : (kShowMs - shown_age) / 400.f;
                 bar_lvl = .45f * fade;
-                if (chord_mode)
-                    n_preview = fx_->ChordNotes(float(tonic), preview);
+                n_preview = chord_mode ? fx_->ChordNotes(float(tonic), preview)
+                                       : fx_->StackPreview(0.f, preview);
             }
 
             /* SING: knob 6 held: the keys are an input meter, left to right,
@@ -415,21 +418,11 @@ namespace chompi
                     SetSmtLedFloat(led_map[i], sing_magenta[0], sing_magenta[1], sing_magenta[2]);
                 else if (fx_->IsStackedNote(float(key_map[i]) - 60.f))
                     SetSmtLedFloat(led_map[i], sing_gold[0], sing_gold[1], sing_gold[2]);
-                else if (show_value && chord_mode)
+                else if (show_value)
                 {
                     bool on = false;
                     for (int k = 0; k < n_preview; k++)
                         on |= preview[k] == float(key_map[i]) - 60.f;
-                    if (on)
-                        SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
-                    else
-                        SetSmtLed(led_map[i], 0, 0, 0);
-                }
-                else if (show_value)
-                {
-                    /* key w covers [w/15, (w+1)/15); lit if the bar reaches into it */
-                    const float k0 = w / 15.f, k1 = (w + 1) / 15.f;
-                    const bool  on = w >= 0 && bar_hi > k0 && bar_lo < k1;
                     if (on)
                         SetSmtLedFloat(led_map[i], sing_gold[0] * bar_lvl, sing_gold[1] * bar_lvl, sing_gold[2] * bar_lvl);
                     else
@@ -697,24 +690,7 @@ namespace chompi
                 break;
 
             // encoder clicks, toggle pages
-            case static_cast<uint16_t>(Hardware::SwId::ENC_3_SW): // knob 4
-            {
-                /* CHORALE: as TEMPO. A short press on page 1 freezes the
-                   delay's buffer, elsewhere goes back to page 1; holding it
-                   (kFxHoldMs) moves to the next page (see Draw) */
-                fx_press_ = rising;
-                if(rising)
-                    fx_press_t_ = System::GetNow();
-                else if(System::GetNow() - fx_press_t_ < kFxHoldMs)
-                {
-                    if(knob_page[3] == 0)
-                        fx_->ToggleGranularFreeze();
-                    else
-                        knob_page[3] = 0;
-                }
-                break;
-            }
-
+            case static_cast<uint16_t>(Hardware::SwId::ENC_3_SW): // fall through
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // fall through
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // fall through
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // fall through
@@ -900,7 +876,7 @@ namespace chompi
             /* SING: the stack knob sits exactly on a note count, so a CC
                position doesn't leave it between steps */
             if(page == 0 && encoderID == 0)
-                enc_values[0][0] = .5f + Harmonizer<kMaxPoly>::StackCount(enc_values[0][0]) * kStackStep;
+                enc_values[0][0] = .5f + Harmonizer<kMaxPoly>::StackPos(enc_values[0][0]) * kStackStep;
 
             if (encoderID <= 2)
             {
@@ -967,11 +943,6 @@ namespace chompi
         uint8_t* knob_page;
         bool quantized_pitch_;
         bool split_delay_;
-
-        /* CHORALE: knob 4 pressed, and when (TEMPO's hold for the next page) */
-        static constexpr uint32_t kFxHoldMs = 750;
-        bool     fx_press_   = false;
-        uint32_t fx_press_t_ = 0;
 
         /* SING: knob 6 held: input meter on the keys */
         static constexpr uint32_t kMeterHoldMs = 500;

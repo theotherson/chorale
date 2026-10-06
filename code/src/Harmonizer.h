@@ -19,7 +19,7 @@ namespace chompi
     extern float freeze_mem[2][kFreezeLen];
 
     /** CHORALE: scales, as semitones above the tonic (Chompi key + knob 1) */
-    static constexpr int kNumScales = 9;
+    static constexpr int kNumScales = 7; // the lower white keys, in this order
     struct Scale
     {
         int n;        // notes per octave
@@ -29,8 +29,6 @@ namespace chompi
         {7, {0, 2, 4, 5, 7, 9, 11}},  // major
         {7, {0, 2, 3, 5, 7, 8, 10}},  // natural minor
         {7, {0, 2, 3, 5, 7, 9, 10}},  // dorian
-        {7, {0, 1, 3, 5, 7, 8, 10}},  // phrygian
-        {7, {0, 2, 4, 6, 7, 9, 11}},  // lydian
         {7, {0, 2, 4, 5, 7, 9, 10}},  // mixolydian
         {7, {0, 2, 3, 5, 7, 8, 11}},  // harmonic minor
         {5, {0, 2, 4, 7, 9}},         // major pentatonic
@@ -126,6 +124,10 @@ namespace chompi
             sr_ = samplerate;
             chord_mode_ = false;
             chord_type_ = 0;
+            voicing_      = 0;
+            chord_octave_ = 0;
+            stack_pos_    = 0;
+            stack_notes_  = 2;
             chord_new_  = false;
             n_held_     = 0;
             scale_      = 0;
@@ -153,7 +155,7 @@ namespace chompi
             SetGlide(0.f);
             SetGate(.4f);
             SetFreeze(0.f);
-            freeze_on_ = false; // starts off: Chompi key + press knob 3
+            freeze_on_ = true; // off at its default: threshold fully left
             SetLevel(.75f);
             SetAttack(.1f);
             SetRelease(.5f);
@@ -203,23 +205,72 @@ namespace chompi
 
         /* ---- knobs, each 0..1 ------------------------------------------ */
 
-        /** knob 1, page 1: notes stacked on the held chord, .5 = none.
-         *  Each 1/12 is one note: above the highest held note to the right,
-         *  below the lowest to the left. */
+        /** knob 1, page 1 (notes mode): which interval is stacked, and
+         *  which way. .5 = none; each 1/10 to the right is the next interval
+         *  above the highest held note (3rds, 4ths, 5ths, 6ths, octaves), to
+         *  the left the same below the lowest. How many: SetStackNotes(). */
         void SetStack(float v)
         {
-            stack_ = StackCount(v);
-            dirty_ = true;
+            stack_pos_ = StackPos(v);
+            UpdateStackShape();
         }
 
-        /** knob 1 value -> stacked notes, -kMaxStack..kMaxStack */
-        static int StackCount(float v)
+        /** knob 1 value -> -kNumIntervals..kNumIntervals (0 = none) */
+        static int StackPos(float v)
         {
-            const int n = int(lroundf((v - .5f) * 2.f * kMaxStack));
-            return n < -kMaxStack ? -kMaxStack : n > kMaxStack ? kMaxStack : n;
+            const int n = int(lroundf((v - .5f) * 2.f * kNumIntervals));
+            return n < -kNumIntervals ? -kNumIntervals : n > kNumIntervals ? kNumIntervals : n;
         }
 
-        /** stacked interval, menu + knob 1: 3rds, 4ths, 5ths, 6ths, octaves */
+        /** menu + knob 1 (notes mode): how many notes are stacked, 1..6 */
+        void SetStackNotes(int n)
+        {
+            stack_notes_ = n < 1 ? 1 : n > kMaxStack ? kMaxStack : n;
+            UpdateStackShape();
+        }
+        int StackNotes() const { return stack_notes_; }
+
+        /** the notes the stack would add to one held note (semitones from
+         *  middle C), for the keys' preview; returns how many */
+        int StackPreview(float root, float *notes) const
+        {
+            if (stack_ == 0)
+                return 0;
+            const int dir  = stack_ < 0 ? -1 : 1;
+            const int base = Degree(root);
+            const int cnt  = stack_ < 0 ? -stack_ : stack_;
+            int       n    = 0;
+            for (int k = 1; k <= cnt; k++)
+            {
+                const float s = DegreeSemis(base + dir * IntervalSteps() * k);
+                if (s < kStackLow || s > kStackHigh)
+                    break;
+                notes[n++] = s;
+            }
+            return n;
+        }
+
+        /** chord mode, menu + knob 1: close, 1st, 2nd, 3rd inversion, open */
+        static constexpr int kNumVoicings = 5;
+        void SetVoicing(int v)
+        {
+            voicing_   = v < 0 ? 0 : v >= kNumVoicings ? kNumVoicings - 1 : v;
+            chord_new_ = true;
+            dirty_     = true;
+        }
+        int Voicing() const { return voicing_; }
+
+        /** chord mode, menu + lowest C# / D#: chords an octave or two down
+         *  or up */
+        void SetChordOctave(int o)
+        {
+            chord_octave_ = o < -2 ? -2 : o > 2 ? 2 : o;
+            chord_new_    = true;
+            dirty_        = true;
+        }
+        int ChordOctave() const { return chord_octave_; }
+
+        /** the stacked interval: 3rds, 4ths, 5ths, 6ths, octaves (knob 1) */
         static constexpr int kNumIntervals = 5;
         void SetInterval(int idx)
         {
@@ -283,11 +334,34 @@ namespace chompi
         {
             const Chord &ch  = kChords[chord_type_];
             const int    deg = Degree(root);
-            int          n   = 0;
-            for (int i = 0; i < ch.n && n < int(kVoices); i++)
+            float all[kChordMax];
+            int   m = 0;
+            for (int i = 0; i < ch.n && m < kChordMax; i++)
+                all[m++] = ch.step[i] == kOctave ? DegreeSemis(deg) + 12.f
+                                                 : DegreeSemis(deg + ch.step[i]);
+
+            /* voicing: an inversion moves the lowest notes up an octave;
+               open moves every other note up one, spreading the chord */
+            if (voicing_ == kNumVoicings - 1)
             {
-                const float s = ch.step[i] == kOctave ? DegreeSemis(deg) + 12.f
-                                                      : DegreeSemis(deg + ch.step[i]);
+                for (int i = 1; i < m; i += 2)
+                    all[i] += 12.f;
+            }
+            else
+            {
+                for (int i = 0; i < voicing_ && i < m - 1; i++)
+                    all[i] += 12.f;
+            }
+            for (int a = 1; a < m; a++) // ascending again
+                for (int b = a; b > 0 && all[b] < all[b - 1]; b--)
+                {
+                    const float t = all[b]; all[b] = all[b - 1]; all[b - 1] = t;
+                }
+
+            int n = 0;
+            for (int i = 0; i < m && n < int(kVoices); i++)
+            {
+                const float s = all[i] + 12.f * float(chord_octave_);
                 if (s >= kStackLow && s <= kStackHigh)
                     notes[n++] = s;
             }
@@ -740,13 +814,12 @@ namespace chompi
             const int dir  = stack_ < 0 ? -1 : 1;
             const int base = Degree(dir > 0 ? hi : lo);
             /* scale steps: 3rds .. 6ths, and an octave is the whole scale */
-            const int kSteps[kNumIntervals] = {2, 3, 4, 5, kScales[scale_].n};
 
             float notes[kVoices];
             int   count = 0;
             for (; count < want; count++)
             {
-                notes[count] = DegreeSemis(base + dir * kSteps[interval_idx_] * (count + 1));
+                notes[count] = DegreeSemis(base + dir * IntervalSteps() * (count + 1));
                 if (notes[count] < kStackLow || notes[count] > kStackHigh)
                     break;
             }
@@ -810,6 +883,22 @@ namespace chompi
                     StrumJoin(*v);
             }
             chord_new_ = false;
+        }
+
+        /** the stacked interval in scale steps; an octave is the whole scale */
+        int IntervalSteps() const
+        {
+            static const int kSteps[kNumIntervals - 1] = {2, 3, 4, 5};
+            return interval_idx_ >= kNumIntervals - 1 ? kScales[scale_].n : kSteps[interval_idx_];
+        }
+
+        /** knob 1's position and the menu's count into stack_ (signed) */
+        void UpdateStackShape()
+        {
+            if (stack_pos_ != 0)
+                interval_idx_ = (stack_pos_ < 0 ? -stack_pos_ : stack_pos_) - 1;
+            stack_ = stack_pos_ == 0 ? 0 : stack_pos_ < 0 ? -stack_notes_ : stack_notes_;
+            dirty_ = true;
         }
 
         void HeldRemove(int key)
@@ -1051,6 +1140,7 @@ namespace chompi
         int              swap_;
         bool             chord_mode_, chord_new_;          /* CHORALE */
         int              chord_type_, scale_, tonic_, n_held_;
+        int              voicing_, chord_octave_, stack_pos_, stack_notes_;
         static constexpr int kMaxHeld = 8;
         struct Held_ { int key; float semis; } held_[kMaxHeld];
         float            sr_, level_, doubler_, spread_;

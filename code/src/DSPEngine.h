@@ -598,6 +598,13 @@ namespace daisy
         float GetGate() { return harmonizer.Gate(); }
         bool IsGateOpen() { return harmonizer.GateOpen(); }
         void SetStackInterval(int idx) { harmonizer.SetInterval(idx); }
+        void SetStackNotes(int n) { harmonizer.SetStackNotes(n); }
+        int GetStackNotes() { return harmonizer.StackNotes(); }
+        int StackPreview(float root, float *notes) { return harmonizer.StackPreview(root, notes); }
+        void SetVoicing(int v) { harmonizer.SetVoicing(v); }
+        int GetVoicing() { return harmonizer.Voicing(); }
+        void SetChordOctave(int o) { harmonizer.SetChordOctave(o); }
+        int GetChordOctave() { return harmonizer.ChordOctave(); }
         int GetStackInterval() { return harmonizer.Interval(); }
         bool IsStackedNote(float semis) { return harmonizer.Stacked(semis); }
         void SetDoubler(float val) { harmonizer.SetDoubler(val); }

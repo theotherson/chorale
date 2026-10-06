@@ -31,7 +31,7 @@ namespace chompi
             }
             env_       = 0.f;
             attacking_ = false;
-            enabled_   = false; // starts off: Chompi key + press knob 2
+            enabled_   = true; // off at its default: the cutoff fully open
             SetAttack(0.f);
             SetDecay(.5f);
             SetCutoff(1.f);

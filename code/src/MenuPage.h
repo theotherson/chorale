@@ -4,14 +4,6 @@
 
 namespace chompi
 {
-    /** SING: knob 1 ring in the menu, one colour per stacked interval */
-    static const float kIntervalColours[5][3] = {
-        {1.f, .78f, .10f}, // 3rds: gold
-        {1.f, .55f, 0.f},  // 4ths: amber
-        {1.f, .42f, .30f}, // 5ths: coral
-        {1.f, .45f, .60f}, // 6ths: rose
-        {1.f, .85f, .65f}, // octaves: warm white
-    };
 
     class MenuPage : public daisy::UiPage
     {
@@ -188,12 +180,18 @@ namespace chompi
 
                 SetPthLedFloat(9, r, g, b);
 
-                // knob 1: the stacked interval (its key is lit too); page 2:
-                // glide, teal, dark when off
-                if(knob_page[0] == 0)
+                // knob 1: notes mode, how many notes stack (gold, brighter
+                // for more); chord mode, the voicing (one colour each);
+                // page 2: glide, teal, dark when off
+                if(knob_page[0] == 0 && fx_->IsChordMode())
                 {
-                    const float *c = kIntervalColours[fx_->GetStackInterval()];
+                    const float *c = kIntervalColours[fx_->GetVoicing()];
                     r = c[0]; g = c[1]; b = c[2];
+                }
+                else if(knob_page[0] == 0)
+                {
+                    const float lvl = .1f + .9f * float(fx_->GetStackNotes()) / 6.f;
+                    r = sing_gold[0] * lvl; g = sing_gold[1] * lvl; b = sing_gold[2] * lvl;
                 }
                 else
                 {
@@ -255,53 +253,61 @@ namespace chompi
                 /* SING: the on/off press shows for a moment: white on, dim off */
                 if(flash_knob_ >= 0 && now - flash_t_ < kFlashMs)
                 {
-                    const float lvl = flash_on_ ? 1.f : .12f;
+                    const float lvl = 1.f; // a reset flashes white
                     SetPthLedFloat(flash_knob_ + 1, lvl, lvl, lvl);
                 }
             }
 
-            // SING: no preset keys (TAPE: save / copy / erase)
-            SetSmtLedFloat(7, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(8, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(9, 0.f, 0.f, 0.f);
-
-            // FX pre / post looper
-            int led_sel = fx_->GetFxPreLooper() ? 5 : 6;
-            int led_off = fx_->GetFxPreLooper() ? 6 : 5;
-            SetSmtLedFloat(led_sel, yellow[0], yellow[1], yellow[2]);
-            SetSmtLedFloat(led_off, 0.f, 0.f, 0.f);
-        
-            // Input select
-            led_sel = 2;
-            led_sel += static_cast<int>(fx_->GetInputSource());
-            SetSmtLedFloat(2, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(3, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(4, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(led_sel, pink[0], .7f * pink[1], .7f * pink[2]);
-
-            // SING: no slots or banks on the keys
-            for (uint8_t i = 1; i < 16; i++)
-                SetSmtLedFloat(25 - i, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(0, 0.f, 0.f, 0.f);
-            SetSmtLedFloat(1, 0.f, 0.f, 0.f);
-
-            /* CHORALE: the scale on the keys, the tonic bright amber and the
-               other scale notes dim; the keys with menu jobs (input, effects
-               order: LEDs 2-6) keep their own lights */
+            /* CHORALE: the keys while the Chompi key is held.
+               Upper octave (middle C to B): the root, light orange, the
+               selected one pink. Lower white keys: the scale, green, the
+               selected one bright. Lowest C# / D#: chord octave down / up,
+               lit while shifted. F# below the middle C: reserved. G#: the
+               input (mic warm white, line teal, resample purple). A#:
+               effects routing, blue, bright before the looper, dim after.
+               The top C: unused. */
             {
-                const int tonic = fx_->GetTonic();
+                static const int kScaleKeys[7] = {48, 50, 52, 53, 55, 57, 59};
+                const int tonic  = fx_->GetTonic();
+                const int scale  = fx_->GetScale();
+                const int octave = fx_->GetChordOctave();
                 for (size_t i = 7; i < (25 + 7); i++)
                 {
-                    const int led = led_map[i];
-                    if (led >= 2 && led <= 6)
-                        continue;
-                    const int semis = int(key_map[i]) - 60;
-                    if (((semis - tonic) % 12 + 12) % 12 == 0)
-                        SetSmtLedFloat(led, sing_amber[0] * .7f, sing_amber[1] * .7f, sing_amber[2] * .7f);
-                    else if (fx_->InScale(semis))
-                        SetSmtLedFloat(led, sing_warm[0] * .12f, sing_warm[1] * .12f, sing_warm[2] * .12f);
+                    const int note = key_map[i];
+                    const int led  = led_map[i];
+                    float r = 0.f, g = 0.f, b = 0.f;
+                    if (note >= 60 && note <= 71)
+                    {
+                        if (note - 60 == tonic) { r = pink[0]; g = pink[1]; b = pink[2]; }
+                        else                    { r = .35f; g = .17f; b = .03f; } // light orange
+                    }
+                    else if (note == 49 || note == 51) // octave down / up
+                    {
+                        const int   shift = note == 49 ? -octave : octave;
+                        const float lvl   = shift >= 2 ? 1.f : shift == 1 ? .5f : .05f;
+                        r = g = b = lvl;
+                    }
+                    else if (note == 56) // input
+                    {
+                        const int src = static_cast<int>(fx_->GetInputSource());
+                        const float *c = src == 0 ? sing_warm : src == 1 ? teal : purple;
+                        r = c[0] * .7f; g = c[1] * .7f; b = c[2] * .7f;
+                    }
+                    else if (note == 58) // effects routing
+                    {
+                        const float lvl = fx_->GetFxPreLooper() ? 1.f : .2f;
+                        b = lvl; g = .25f * lvl;
+                    }
                     else
-                        SetSmtLedFloat(led, 0.f, 0.f, 0.f);
+                    {
+                        for (int k = 0; k < 7; k++)
+                            if (note == kScaleKeys[k])
+                            {
+                                const float lvl = k == scale ? 1.f : .12f;
+                                g = lvl;
+                            }
+                    }
+                    SetSmtLedFloat(led, r, g, b);
                 }
             }
 
@@ -321,13 +327,16 @@ namespace chompi
             if(stepsPerRevolution > 0)
                 return false; // fall through to normalpage
 
-            /* CHORALE: knob 1 (page 1) picks the scale here, one per detent:
-               major, minor, dorian, phrygian, lydian, mixolydian, harmonic
-               minor, major and minor pentatonic; the keys show it */
+            /* CHORALE: knob 1 (page 1), one step per detent: in notes mode
+               how many notes the stack adds (1-6), in chord mode the voicing
+               (close, 1st, 2nd, 3rd inversion, open) */
             if(encoderID == 0 && page == 0)
             {
                 const int step = turns > 0 ? 1 : turns < 0 ? -1 : 0;
-                fx_->SetScale(fx_->GetScale() + step);
+                if(fx_->IsChordMode())
+                    fx_->SetVoicing(fx_->GetVoicing() + step);
+                else
+                    fx_->SetStackNotes(fx_->GetStackNotes() + step);
                 return true;
             }
 
@@ -441,11 +450,16 @@ namespace chompi
 
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_4_SW): // knob 1
-                if(rising) // CHORALE: next stack interval / SING: no strum
+                if(rising) // CHORALE: knob 1 back to its defaults (page 2: strum to the centre)
                 {
                     if(knob_page[0] == 0)
-                        fx_->SetStackInterval((fx_->GetStackInterval() + 1)
-                                              % Harmonizer<kMaxPoly>::kNumIntervals);
+                    {
+                        enc_values[0][0] = enc_defaults[0][0];
+                        fx_->SetStack(enc_values[0][0]);
+                        fx_->SetStackNotes(2);
+                        fx_->SetVoicing(0);
+                        Flash(0);
+                    }
                     else
                     {
                         enc_values[1][0] = enc_defaults[1][0];
@@ -459,22 +473,32 @@ namespace chompi
                 return false;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
-                if(rising) // SING: filter envelope on/off
+                if(rising) // CHORALE: everything on knob 2 back to its defaults
                 {
-                    fx_->ToggleFilterEnv();
-                    flash_knob_ = 1;
-                    flash_on_   = fx_->IsFilterEnvOn();
-                    flash_t_    = System::GetNow();
+                    enc_values[0][1] = enc_defaults[0][1];
+                    enc_values[1][1] = enc_defaults[1][1];
+                    fx_->SetAttack(enc_values[0][1]);
+                    fx_->SetFilterEnvAttack(enc_values[1][1]);
+                    onset_  = .4f;
+                    cutoff_ = 1.f;
+                    fx_->SetGate(onset_);
+                    fx_->SetFilterEnvCutoff(cutoff_);
+                    Flash(1);
                 }
                 break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_2_SW): // knob 3
-                if(rising) // SING: freeze on/off
+                if(rising) // CHORALE: everything on knob 3 back to its defaults
                 {
-                    fx_->ToggleFreezeOn();
-                    flash_knob_ = 2;
-                    flash_on_   = fx_->IsFreezeOn();
-                    flash_t_    = System::GetNow();
+                    enc_values[0][2] = enc_defaults[0][2];
+                    enc_values[1][2] = enc_defaults[1][2];
+                    fx_->SetDecay(enc_values[0][2]);
+                    fx_->SetFilterEnvDecay(enc_values[1][2]);
+                    freeze_  = 0.f;
+                    env_res_ = 0.f;
+                    fx_->SetFreeze(freeze_);
+                    fx_->SetFilterEnvRes(env_res_);
+                    Flash(2);
                 }
                 break;
 
@@ -521,54 +545,49 @@ namespace chompi
                 chompi_key_pressed = rising; // the menu closes on its release
                 break;
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_16): // TAPE: banks;
-            case static_cast<uint16_t>(Hardware::SwId::KEY_17): // CHORALE: tonic
-                if(rising)
-                    fx_->SetTonic(int(key_map[buttonID]) - 60);
-                break;
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // mic in, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_19): // aux in, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_20): // resample
+            /* CHORALE: lowest C# / D#: chord octave down / up (both:
+               back to 0); F# below the middle C: reserved; G#: next input;
+               A#: effects before / after the looper. Releases fall through. */
+            case static_cast<uint16_t>(Hardware::SwId::KEY_16):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_17):
             {
-                if(rising)
-                {
-                    InputSource source;
-                    if(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_18))
-                        source = InputSource::MIC;
-                    else if(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_19))
-                        source = InputSource::LINE_IN;
-                    else
-                        source = InputSource::RESAMPLE;
-
-                    fx_->SetInputSource(source);
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
+                const bool down = buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_16);
+                (down ? oct_down_held_ : oct_up_held_) = rising;
+                if(!rising)
+                    return false;
+                if(oct_down_held_ && oct_up_held_)
+                    fx_->SetChordOctave(0);
+                else
+                    fx_->SetChordOctave(fx_->GetChordOctave() + (down ? -1 : 1));
                 break;
             }
 
-
-            case static_cast<uint16_t>(Hardware::SwId::KEY_21): // fx pre looper, fall through
-            case static_cast<uint16_t>(Hardware::SwId::KEY_22): // fx post looper
-            {
-                if(rising)
-                {
-                    fx_->SetFxPreLooper(buttonID == static_cast<uint16_t>(Hardware::SwId::KEY_21));
-                }
-                else if(!rising)
-                    return false; // note off falls through
-
+            case static_cast<uint16_t>(Hardware::SwId::KEY_18): // reserved: slice / sequence
+                if(!rising)
+                    return false;
                 break;
-            }
 
+            case static_cast<uint16_t>(Hardware::SwId::KEY_19): // input: mic, line, resample
+                if(!rising)
+                    return false;
+                fx_->SetInputSource(InputSource((static_cast<int>(fx_->GetInputSource()) + 1) % 3));
+                break;
 
-            case static_cast<uint16_t>(Hardware::SwId::KEY_23): // TAPE: erase,
-            case static_cast<uint16_t>(Hardware::SwId::KEY_24): // copy,
-            case static_cast<uint16_t>(Hardware::SwId::KEY_25): // save presets
-                if(rising) // CHORALE: tonic
-                    fx_->SetTonic(int(key_map[buttonID]) - 60);
+            case static_cast<uint16_t>(Hardware::SwId::KEY_20): // effects before / after the looper
+                if(!rising)
+                    return false;
+                fx_->SetFxPreLooper(!fx_->GetFxPreLooper());
+                break;
+
+            /* the upper black keys are roots, with the white ones below */
+            case static_cast<uint16_t>(Hardware::SwId::KEY_21):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_22):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_23):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_24):
+            case static_cast<uint16_t>(Hardware::SwId::KEY_25):
+                if(!rising)
+                    return false;
+                fx_->SetTonic(int(key_map[buttonID]) - 60);
                 break;
 
             // white keys and play/pause
@@ -580,12 +599,20 @@ namespace chompi
                     fx_->IncrementLooperDubGain(gain);
                     break;
                 }
-                /* CHORALE: a key pressed in the menu sets the tonic; its
+                /* CHORALE: a white key: upper octave the root, lower octave
+                   the scale (major, minor, dorian, mixolydian, harmonic
+                   minor, major and minor pentatonic), the top C nothing. Its
                    release falls through, so a key held from before the menu
                    still lets go */
                 if(rising)
                 {
-                    fx_->SetTonic(int(key_map[buttonID]) - 60);
+                    static const int kScaleKeys[7] = {48, 50, 52, 53, 55, 57, 59};
+                    const int note = key_map[buttonID];
+                    if(note >= 60 && note <= 71)
+                        fx_->SetTonic(note - 60);
+                    for(int k = 0; k < 7; k++)
+                        if(note == kScaleKeys[k])
+                            fx_->SetScale(k);
                     break;
                 }
                 return false;
@@ -654,7 +681,14 @@ namespace chompi
         /* SING: a press of knob 2 / 3 shows its ring white (on) or dim
            white (off) for kFlashMs */
         static constexpr uint32_t kFlashMs = 500;
+        /** a knob reset shows white on its ring for a moment */
+        void Flash(int knob)
+        {
+            flash_knob_ = knob;
+            flash_t_    = System::GetNow();
+        }
         int      flash_knob_ = -1;
+        bool     oct_down_held_ = false, oct_up_held_ = false; // CHORALE
         bool     flash_on_   = false;
         uint32_t flash_t_    = 0;
         float final_comp;
