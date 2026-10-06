@@ -77,6 +77,13 @@ namespace chompi
             }
             SetPthLedFloat(0, r, g, b);
         
+            /* CHORALE: Chompi key + loop held kLoopClearMs clears the loop */
+            if(loop_held_ && now - loop_held_t_ > kLoopClearMs)
+            {
+                fx_->RequestLoopClear();
+                loop_held_ = false;
+            }
+
             /* CHORALE: play: the pattern mode (sequence, arp up, down, up
                and down, random: the interval colours); loop: the raw loop,
                white while it plays; the wheel's lights: the rest pattern
@@ -599,9 +606,16 @@ namespace chompi
                         fx_->SeqNextMode();
                     break;
                 }
-                if(buttonID == 34)
+                if(buttonID == 34) // tap: stop / start; held 1.5 s: clear (Draw)
                 {
-                    fx_->LooperPlayButton(rising);
+                    if(rising)
+                    {
+                        fx_->RequestLoopToggle();
+                        loop_held_    = true;
+                        loop_held_t_  = System::GetNow();
+                    }
+                    else
+                        loop_held_ = false;
                     break;
                 }
                 /* CHORALE: a white key: upper octave the root, lower octave
@@ -628,6 +642,7 @@ namespace chompi
 
         void OnFocusGained() override
         {
+            loop_held_ = false; // CHORALE: a hold from an earlier menu doesn't count
             fx_reset = false;
             pitch_reset = false;
             chompi_key_pressed = true;
@@ -703,6 +718,9 @@ namespace chompi
         }
         int      flash_knob_ = -1;
         bool     oct_down_held_ = false, oct_up_held_ = false; // CHORALE
+        static constexpr uint32_t kLoopClearMs = 1500;     // CHORALE: Chompi + loop held
+        bool     loop_held_   = false;
+        uint32_t loop_held_t_ = 0;
         bool     flash_on_   = false;
         uint32_t flash_t_    = 0;
         float final_comp;

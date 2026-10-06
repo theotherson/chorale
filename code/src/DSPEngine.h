@@ -442,6 +442,21 @@ namespace daisy
             }
 
 
+            /* CHORALE: the loop's stop / start and clear, asked for from the
+               menu (Chompi key + loop), done here with the looper */
+            if(loop_toggle_req_)
+            {
+                loop_toggle_req_ = false;
+                if(!looper.IsFirstRecording())
+                    looper.TogglePlaying();
+            }
+            if(loop_clear_req_)
+            {
+                loop_clear_req_ = false;
+                looper.Reset();
+                looper_reset = true;
+            }
+
             /** looper read + write */
             looper.CheckRecordReady();
             if(looper.CheckReset())
@@ -644,6 +659,10 @@ namespace daisy
             slice_mode_ = on;
         }
         void SetSliceCount(int n) { slices_.SetSliceCount(n); }
+
+        /* CHORALE: the loop itself, from the menu, done in Process() */
+        void RequestLoopToggle() { loop_toggle_req_ = true; }
+        void RequestLoopClear() { loop_clear_req_ = true; }
         int GetSliceCount() const { return slices_.SliceCount(); }
 
         /* ---- CHORALE: the sequencer and its clock -------------------- */
@@ -1015,6 +1034,7 @@ namespace daisy
         SliceEngine      slices_;                   // CHORALE: slice mode
         RamBufferMemory *loop_mem_;
         bool             slice_mode_;
+        volatile bool    loop_toggle_req_ = false, loop_clear_req_ = false; // CHORALE
         Sequencer        seq_;                      // CHORALE: the sequencer
         clockManager    *clock_ = nullptr;
         int              seq_key_;                  // the sequenced note sounding, or -1

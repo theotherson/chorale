@@ -127,8 +127,8 @@ step lights white, the other keys in the sequence red (harmonies) or yellow (sli
 - **Chompi key + play:** the pattern mode: sequence (the order you pressed the keys), arp up,
   arp down, arp up and down, random (play key: gold, amber, coral, rose, warm white).
 - **Chompi key + turn the wheel:** the rest pattern, TEMPO's five (none, then more gaps).
-- **Loop button:** records the loop, as before (the slices' material). **Chompi key + loop**
-  plays or stops the loop itself.
+- **Loop button:** records the loop, as before (the slices' material). **Chompi key + tap loop**
+  stops or starts the loop itself; **Chompi key + hold loop** (1.5 s) clears it.
 
 TEMPO's granular delay follows the same clock.
 
