@@ -446,10 +446,22 @@ namespace chompi
                 {
                     if (fx_->IsSlicePlaying(int(i)))
                         SetSmtLedFloat(led_map[i], 1.f, 1.f, 1.f);
+                    else if (fx_->IsInSeq(int(i)) && (fx_->IsSeqLatched() || fx_->IsSeqPlaying()))
+                        SetSmtLedFloat(led_map[i], yellow[0], yellow[1], yellow[2]);
                     else if (fx_->HasSlices() && WhiteKeyIndex(key_map[i]) >= 0)
                         SetSmtLedFloat(led_map[i], yellow[0] * .15f, yellow[1] * .15f, yellow[2] * .15f);
                     else
                         SetSmtLed(led_map[i], 0, 0, 0);
+                    continue;
+                }
+                /* CHORALE: harmonies in a sequence: the sounding step white,
+                   the other keys in it red (as TEMPO) */
+                if ((fx_->IsSeqLatched() || fx_->IsSeqPlaying()) && fx_->IsInSeq(int(i)))
+                {
+                    if (fx_->SeqCurrentKey() == int(i))
+                        SetSmtLedFloat(led_map[i], 1.f, 1.f, 1.f);
+                    else
+                        SetSmtLedFloat(led_map[i], .8f, 0.f, 0.f);
                     continue;
                 }
                 /* CHORALE: the tonic marks the keyboard, as the Cs did */
@@ -536,53 +548,23 @@ namespace chompi
 
                     break;
                 }
-                case 4: // transport
-                {                    
-                    if(fx_->GetLooperIsEmpty())
+                case 4: // CHORALE: the sequencer's steps on the wheel's lights
+                {
+                    if(fx_->IsSeqPlaying())
                     {
-                        SetPthLedFloat(5, 0.f, 0.f, 0.f);
-                        SetPthLedFloat(6, 0.f, 0.f, 0.f);
-                    }
-                    else if(fx_->IsLooperPlaying())
-                    {
-                        float idx = value < .5f ? value * 2.f : (1.f - value) * 2.f; // 0 - 1 - 0
-                        int led_on = value > .5f ? 6 : 5;
-                        int led_off = value > .5f ? 5 : 6;
-
-                        r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                        g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                        b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-
-
-                        SetPthLedFloat(led_on, r, g, b);
-
-                        if (idx > .8f)
-                        {
-                            float dim = (idx - .8f) * 5.f;
-
-                            r = color_xfade(0.f, red[0], dim);
-                            g = color_xfade(0.f, red[1], dim);
-                            b = color_xfade(0.f, red[2], dim);
-
-
-                            SetPthLedFloat(led_off, r, g, b);
-                        }
-                        else
-                        {
-                            SetPthLedFloat(led_off, 0.f, 0.f, 0.f);
-                        }
-
-                        value = value * 4.f - 2.f; // -2 - 2
+                        /* each step lights one side, alternately, fading
+                           through the step */
+                        const float lvl = 1.f - .85f * fx_->SeqPhase();
+                        const int   on  = (fx_->SeqSteps() & 1) ? 6 : 5;
+                        SetPthLedFloat(on, teal[0] * lvl, teal[1] * lvl, teal[2] * lvl);
+                        SetPthLedFloat(on == 5 ? 6 : 5, 0.f, 0.f, 0.f);
                     }
                     else
                     {
-                        float scrub = fx_->GetLooperScrub() * .5f;
-                        int led = 5 + (scrub > 0.f);
-
-                        scrub = fabsf(scrub);
-                        SetPthLedFloat(led, scrub, scrub, scrub);
+                        const float lvl = fx_->IsSeqLatched() ? .25f : .04f;
+                        SetPthLedFloat(5, teal[0] * lvl, teal[1] * lvl, teal[2] * lvl);
+                        SetPthLedFloat(6, teal[0] * lvl, teal[1] * lvl, teal[2] * lvl);
                     }
-
                     break;
                 }
                 case 5: // gain
@@ -616,37 +598,12 @@ namespace chompi
 
             /** PTH leds */
             float r, g, b;
-            // play key
-            if(fx_->GetLooperIsEmpty() && !fx_->IsLooperRecordArmed())
+            // CHORALE: play key: the sequencer, teal while it plays, dim
+            // while latched
             {
-                r = g = b = 0.f;
+                const float lvl = fx_->IsSeqPlaying() ? 1.f : fx_->IsSeqLatched() ? .2f : 0.f;
+                SetPthLedFloat(led_map[33], teal[0] * lvl, teal[1] * lvl, teal[2] * lvl);
             }
-            else if(fx_->IsLooperRecordArmed())
-            {
-                r = g = b = 1.f;
-            }
-            else if(fx_->IsLooperFirstRecording() && fx_->IsLooperRecording())
-            {
-                r = teal[0];
-                g = teal[1];
-                b = teal[2];
-            }
-            else if(fx_->IsLooperPlaying())
-            {
-                float position = 1.f - fx_->GetLooperPosition();
-                r = teal[0] * position;
-                g = teal[1] * position;
-                b = teal[2] * position;
-            }
-            else // we're paused
-            {
-                float position = 1.f - fx_->GetLooperPosition();
-                r = position;
-                g = position;
-                b = position;
-            }
-
-            SetPthLedFloat(led_map[33], r, g, b);
 
             // loop key
             if(fx_->GetLooperIsEmpty() && !fx_->IsLooperRecordArmed())
@@ -767,14 +724,19 @@ namespace chompi
             // reset the looper pitch
             case ENC_5_SW:
             {
-                if (!rising)
+                /* CHORALE: a click toggles the sequencer's latch; holding it
+                   and turning sets the rate instead */
+                if (rising)
                 {
-                    enc_values[0][4] = enc_defaults[0][4];
-                    hw_->SendCC(midi_channel, cc_map[0][4], enc_values[0][4] * 127.f);
+                    wheel_held_   = true;
+                    wheel_turned_ = false;
                 }
-
-                fx_->SetLooperPitch(1.f);
-                fx_->ResetLooperPitchQuant();
+                else
+                {
+                    wheel_held_ = false;
+                    if (!wheel_turned_)
+                        fx_->ToggleSeqLatch();
+                }
                 break;
             }
 
@@ -793,8 +755,10 @@ namespace chompi
             // CC buttons
             case static_cast<uint16_t>(Hardware::SwId::KEY_27): // play
             {
-                last_arm_blink = System::GetNow();
-                fx_->LooperPlayButton(rising);    
+                /* CHORALE: play starts / stops the sequencer (the loop
+                   itself: Chompi key + loop) */
+                if(rising)
+                    fx_->SetSeqPlay(!fx_->IsSeqPlaying());
                 hw_->SendCC(midi_channel, 26, rising ? 127 : 0);
                 break;
             }
@@ -856,6 +820,22 @@ namespace chompi
 
             uint8_t page = knob_page[encoderID];
             float old_val = enc_values[page][encoderID];
+
+            /* CHORALE: the wheel: tempo; held while turning, the rate
+               (TEMPO's clock divisions) */
+            if(encoderID == 4)
+            {
+                if(stepsPerRevolution > 0)
+                    return true; // no CC for it
+                if(wheel_held_)
+                {
+                    wheel_turned_ = true;
+                    fx_->ChangeSeqRate(turns);
+                }
+                else
+                    fx_->ChangeTempo(turns);
+                return true;
+            }
 
             /* CHORALE: slice mode: knobs 1-3 are TEMPO's slice controls
                (page 1 pitch, start, end, finely; page 2 volume, attack,
@@ -1000,6 +980,9 @@ namespace chompi
         uint8_t* knob_page;
         bool quantized_pitch_;
         bool split_delay_;
+
+        /* CHORALE: the wheel held, and turned while held */
+        bool wheel_held_ = false, wheel_turned_ = false;
 
         /* SING: knob 6 held: input meter on the keys */
         static constexpr uint32_t kMeterHoldMs = 500;

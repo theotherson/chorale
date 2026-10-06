@@ -152,7 +152,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
     }
     if(cManager.checkIntervalExpired(0))
         gdelay.setClockEdge();
-    cManager.checkIntervalExpired(1);
+    if(cManager.checkIntervalExpired(Engine::kSeqClock)) // CHORALE: the sequencer's step
+        engine.SeqStep();
     cManager.checkIntervalExpired(2);
 
     // does this have to happen in the audio callback?
@@ -396,6 +397,7 @@ int main(void)
     loop_buff.Init(&loop_mem[0]);
     cManager.Init(hw.seed.AudioSampleRate());
     gdelay.Init(granularBuffer, frozenBuffer, kGranularLen, &cManager, false);
+    engine.SetClock(&cManager);
     engine.Init(hw.seed.AudioSampleRate(), &reverb, &gdelay, 
                 &loop_buff, options.tape_slew_on,
                 MonitorMode(options.monitor_position));

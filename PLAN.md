@@ -27,8 +27,11 @@ fits together, and two lessons:
    `SamplePlayer.h`); needs a hardware check. Source: whatever the looper has recorded, cut into 16
    slices on the white keys. Chompi key + F# below the middle C (reserved for it) flips the keys
    between harmonies and slices. In slice mode, knobs 1-3 are TEMPO's slice controls.
-3. **The sequencer and arpeggiator**, on TEMPO's clock: the wheel's tempo (knob 5, which is the
-   looper today, needs a decision), latch, chord progressions in chord mode.
+3. **The sequencer and arpeggiator**, on TEMPO's clock. Done (`Sequencer.h`, after TEMPO's
+   ArpeggiatorSequencer): play runs it; the wheel is tempo / rate / latch, Chompi + click tap
+   tempo; Chompi + play pattern mode, + wheel rests, + loop the raw loop; slice count on Chompi +
+   knob 2 in slice mode. Needs a hardware check. Next: chord progressions in chord mode (a step
+   per chord, chord types per step), and saving settings.
 
 ## Decided controls
 
@@ -39,6 +42,5 @@ the effects routing, + F# reserved for slices / sequence; the top C is free.
 
 ## Open
 
-- Knob 5: the looper's pitch / scrub today; TEMPO used it for tempo.
 - Whether the slice engine should also take TEMPO-style separate recordings.
 - Saving settings (CHORALE starts from defaults every time).

@@ -12,6 +12,7 @@
 #include "Harmonizer.h"
 #include "FilterEnv.h"
 #include "SliceEngine.h" // CHORALE: TEMPO's vocal chops on the looper
+#include "Sequencer.h"   // CHORALE: after TEMPO's arpeggiator / sequencer
 
 /* SING: defined in chompi_main.cpp, in DTCM */
 extern chompi::Harmonizer<7> harmonizer;
@@ -180,6 +181,11 @@ namespace daisy
             loop_mem_ = loop_buff;
             slices_.Init(samplerate);
             slice_mode_ = false;
+            seq_.Init();
+            seq_key_ = -1;
+            seq_since_ = 0;
+            seq_period_ = 9000;
+            seq_steps_ = 0;
 
             /** Final output compressors */
             lim_hp_l_.Init();
@@ -401,6 +407,14 @@ namespace daisy
                 out[1][i] = filter_env_.Process(FilterEnv::HARM_R, i, out[1][i] * wet[i]);
             }
 
+            /* CHORALE: a sequenced note lets go after kSeqGate of its step */
+            seq_since_ += uint32_t(size);
+            if (seq_key_ >= 0 && float(seq_since_) > kSeqGate * float(seq_period_))
+            {
+                TargetOff(seq_key_);
+                seq_key_ = -1;
+            }
+
             /* CHORALE: the slices of the loop, as it is now */
             slices_.SetSource(loop_mem_->mem, loop_mem_->length / 2);
             slices_.Process(out[0], out[1], size);
@@ -571,17 +585,21 @@ namespace daisy
                 /* SING: keys play harmony voices of the live
                    input instead of samples. transpose_nn_ is the key's
                    distance from the middle C in semitones. */
-                if (slice_mode_) // CHORALE: or the loop's slices
+                /* CHORALE: the sequencer keeps every key; while it plays,
+                   it decides what sounds (SeqStep), else the key plays
+                   at once, as a slice or a harmony */
+                if (req.type_ == KeyRequest::Type::START)
                 {
-                    if (req.type_ == KeyRequest::Type::START)
-                        slices_.NoteOn(req.key_, int(lroundf(req.transpose_nn_)) + 60);
-                    else if (req.type_ == KeyRequest::Type::STOP)
-                        slices_.NoteOff(req.key_);
+                    seq_.KeyDown(req.key_, req.transpose_nn_);
+                    if (!seq_.Playing())
+                        TargetOn(req.key_, req.transpose_nn_);
                 }
-                else if (req.type_ == KeyRequest::Type::START)
-                    harmonizer.NoteOn(req.key_, req.transpose_nn_);
                 else if (req.type_ == KeyRequest::Type::STOP)
-                    harmonizer.NoteOff(req.key_);
+                {
+                    seq_.KeyUp(req.key_);
+                    if (!seq_.Playing())
+                        TargetOff(req.key_);
+                }
             }
             harmonizer.Refresh(); // SING: re-voice the stack after key or knob changes
         }
@@ -621,7 +639,86 @@ namespace daisy
         {
             harmonizer.AllOff();
             slices_.AllOff();
+            seq_.Clear();     // keys mean other things now
+            seq_key_ = -1;
             slice_mode_ = on;
+        }
+        void SetSliceCount(int n) { slices_.SetSliceCount(n); }
+        int GetSliceCount() const { return slices_.SliceCount(); }
+
+        /* ---- CHORALE: the sequencer and its clock -------------------- */
+
+        void SetClock(clockManager *c) { clock_ = c; }
+
+        /** a clock step (the sequencer's division, from the audio
+         *  callback): the last note lets go, the next one plays */
+        void SeqStep()
+        {
+            if (seq_since_ > 0)
+                seq_period_ = seq_since_;
+            seq_since_ = 0;
+            seq_steps_++;
+            if (!seq_.Playing())
+                return;
+            if (seq_key_ >= 0)
+            {
+                TargetOff(seq_key_);
+                seq_key_ = -1;
+            }
+            int   key;
+            float semis;
+            if (seq_.Step(key, semis))
+            {
+                TargetOn(key, semis);
+                seq_key_ = key;
+            }
+        }
+
+        /** play: start / stop the sequence (held keys go quiet either way;
+         *  the sequence, or a press, plays them again) */
+        void SetSeqPlay(bool on)
+        {
+            harmonizer.AllOff();
+            slices_.AllOff();
+            seq_key_ = -1;
+            seq_.SetPlay(on);
+        }
+        bool IsSeqPlaying() const { return seq_.Playing(); }
+        void ToggleSeqLatch() { seq_.ToggleLatch(); }
+        bool IsSeqLatched() const { return seq_.Latched(); }
+        void SeqNextMode() { seq_.NextMode(); }
+        int GetSeqMode() const { return seq_.GetMode(); }
+        void SeqStepRest(int d) { seq_.StepRest(d); }
+        int GetSeqRest() const { return seq_.Rest(); }
+        bool IsInSeq(int key) const { return seq_.InSeq(key); }
+        int SeqCurrentKey() const { return seq_key_; }
+        uint32_t SeqSteps() const { return seq_steps_; }
+        /** 0 at a step, rising to 1 by the next */
+        float SeqPhase() const
+        {
+            const float p = float(seq_since_) / float(seq_period_ > 0 ? seq_period_ : 1);
+            return p > 1.f ? 1.f : p;
+        }
+
+        /* the wheel: tempo, rate (held + turn), tap (Chompi + click) */
+        void ChangeTempo(int turns) { if (clock_) clock_->changeTempo(turns); }
+        void ChangeSeqRate(int turns) { if (clock_) clock_->changeDiv(turns, kSeqClock); }
+        void TapTempo() { if (clock_) clock_->processTapClock(0.f); }
+
+        /** what a key or the sequencer plays: a slice or a harmony */
+        void TargetOn(int key, float semis)
+        {
+            if (slice_mode_)
+                slices_.NoteOn(key, int(lroundf(semis)) + 60);
+            else
+                harmonizer.NoteOn(key, semis);
+        }
+        void TargetOff(int key)
+        {
+            if (slice_mode_)
+                slices_.NoteOff(key);
+            else
+                harmonizer.NoteOff(key);
         }
         bool IsSliceMode() const { return slice_mode_; }
         bool HasSlices() const { return slices_.HasSource(); }
@@ -918,6 +1015,14 @@ namespace daisy
         SliceEngine      slices_;                   // CHORALE: slice mode
         RamBufferMemory *loop_mem_;
         bool             slice_mode_;
+        Sequencer        seq_;                      // CHORALE: the sequencer
+        clockManager    *clock_ = nullptr;
+        int              seq_key_;                  // the sequenced note sounding, or -1
+        uint32_t         seq_since_, seq_period_, seq_steps_;
+        static constexpr float kSeqGate = .6f;     // share of a step a note sounds
+    public:
+        static constexpr size_t kSeqClock = 1;     // the clock division it follows
+    private:
         float            slice_vals_[2][3] = {{.5f, 0.f, 1.f}, {.6f, 0.f, .2f}};
         const float *dry_buf_ = nullptr;            // this block's dry gain
 

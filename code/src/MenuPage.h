@@ -77,39 +77,18 @@ namespace chompi
             }
             SetPthLedFloat(0, r, g, b);
         
-            // play / overdub keys
+            /* CHORALE: play: the pattern mode (sequence, arp up, down, up
+               and down, random: the interval colours); loop: the raw loop,
+               white while it plays; the wheel's lights: the rest pattern
+               (none dim, then brighter) */
             {
-                const float gain = fx_->GetLooperDubGain();
-                SetPthLedFloat(7, gain, gain, gain);
-                SetPthLedFloat(8, gain, gain, gain);
-
-                if(!fx_->GetLooperIsEmpty())
-                {
-                    float idx = enc_values[0][4] < .5f ? enc_values[0][4] * 2.f : (1.f - enc_values[0][4]) * 2.f; // 0 - 1 - 0
-                    int led_on = enc_values[0][4] > .5f ? 6 : 5;
-                    int led_off = enc_values[0][4] > .5f ? 5 : 6;
-
-                    r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                    g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                    b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-
-                    SetPthLedFloat(led_on, r, g, b);
-
-                    if (idx > .8f)
-                    {
-                        float dim = (idx - .8f) * 5.f;
-
-                        r = color_xfade(0.f, red[0], dim);
-                        g = color_xfade(0.f, red[1], dim);
-                        b = color_xfade(0.f, red[2], dim);
-
-                        SetPthLedFloat(led_off, r, g, b);
-                    }
-                    else
-                    {
-                        SetPthLedFloat(led_off, 0.f, 0.f, 0.f);
-                    }
-                }
+                const float *c = kIntervalColours[fx_->GetSeqMode()];
+                SetPthLedFloat(7, c[0], c[1], c[2]);
+                const float lp = fx_->IsLooperPlaying() ? 1.f : .05f;
+                SetPthLedFloat(8, lp, lp, lp);
+                const float rl = .08f + .23f * float(fx_->GetSeqRest());
+                SetPthLedFloat(5, teal[0] * rl, teal[1] * rl, teal[2] * rl);
+                SetPthLedFloat(6, teal[0] * rl, teal[1] * rl, teal[2] * rl);
             }
 
             // shift encoder display
@@ -201,7 +180,14 @@ namespace chompi
                 SetPthLedFloat(1, r, g, b);
 
                 /* knobs 2 and 3, each by its own page */
-                if(knob_page[1] == 0)
+                if(knob_page[1] == 0 && fx_->IsSliceMode())
+                {
+                    /* slice mode: knob 2: how many slices, yellow, brighter
+                       for more */
+                    const float lvl = float(fx_->GetSliceCount()) / 16.f;
+                    SetPthLedFloat(2, yellow[0] * lvl, yellow[1] * lvl, yellow[2] * lvl);
+                }
+                else if(knob_page[1] == 0)
                 {
                     /* knob 2: input threshold, shown live: magenta while
                        the voice is over it, dim coral under it, dark off */
@@ -348,6 +334,14 @@ namespace chompi
 
             /* SING: knobs 2-3 set the input gate (page 1: onset, offset)
                and the filter envelope's filter (page 2: cutoff, resonance) */
+            /* CHORALE: slice mode: knob 2 (page 1) sets how many slices,
+               4, 8, 12 or 16, one step per detent */
+            if(encoderID == 1 && page == 0 && fx_->IsSliceMode())
+            {
+                fx_->SetSliceCount(fx_->GetSliceCount() + (turns > 0 ? 4 : -4));
+                return true;
+            }
+
             if(encoderID == 1 || encoderID == 2)
             {
                 float &val = page == 0 ? (encoderID == 1 ? onset_ : freeze_)
@@ -397,23 +391,9 @@ namespace chompi
                         fx_->SetWarble(warble);
                     }
                 }
-                else if(encoderID == 4)
+                else if(encoderID == 4) // CHORALE: the wheel: the rest pattern
                 {
-                    if(quantized_pitch_)
-                        enc_values[0][4] = fx_->SetLooperPitchQuantized(turns, enc_values[0][4]);
-                    else
-                    {
-                        enc_values[0][4] += turns * kEncoderFineStep;
-                        enc_values[0][4] = fclamp(enc_values[0][4], 0.f, 1.f);
-                        fx_->SetLooperPitchFree(enc_values[0][4]);
-                    }
-
-                    float idx = enc_values[0][4] < .5f ? enc_values[0][4] * 2.f : (1.f - enc_values[0][4]) * 2.f; // 0 - 1 - 0
-                    r = color_quad_xfade(med_blue[0], green[0], yellow[0], red[0], idx);
-                    g = color_quad_xfade(med_blue[1], green[1], yellow[1], red[1], idx);
-                    b = color_quad_xfade(med_blue[2], green[2], yellow[2], red[2], idx);
-                    SetPthLedFloat(5, r, g, b);
-                    SetPthLedFloat(6, r, g, b);
+                    fx_->SeqStepRest(turns > 0 ? 1 : -1);
                 }               
                 else if(encoderID == 5)
                 {
@@ -480,8 +460,10 @@ namespace chompi
                 break;
 
             // reset the looper pitch via fall through
-            case ENC_5_SW:
-                return false;
+            case ENC_5_SW: // CHORALE: Chompi key + wheel click: tap tempo
+                if(rising)
+                    fx_->TapTempo();
+                break;
 
             case static_cast<uint16_t>(Hardware::SwId::ENC_1_SW): // knob 2
                 if(rising && fx_->IsSliceMode())
@@ -609,10 +591,17 @@ namespace chompi
             // white keys and play/pause
             default:
                 // play pause, overdub gain setting
-                if(buttonID == 33 || buttonID == 34)
+                /* CHORALE: Chompi key + play: the next pattern mode; + loop:
+                   the raw loop plays / stops */
+                if(buttonID == 33)
                 {
-                    const float gain = buttonID == 33 ? -.1f : .1f;
-                    fx_->IncrementLooperDubGain(gain);
+                    if(rising)
+                        fx_->SeqNextMode();
+                    break;
+                }
+                if(buttonID == 34)
+                {
+                    fx_->LooperPlayButton(rising);
                     break;
                 }
                 /* CHORALE: a white key: upper octave the root, lower octave

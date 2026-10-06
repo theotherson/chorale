@@ -39,6 +39,7 @@ namespace chompi
             frames_ = 0;
             toggle_ = false;
             clock_  = 0;
+            count_  = kSlices;
             SetPitch(.5f);
             SetVolume(.6f);
             SetStart(0.f);
@@ -100,6 +101,13 @@ namespace chompi
             for (int i = 0; i < kVoices; i++)
                 voices_[i].gate = false;
         }
+
+        /** menu + knob 2 (slice mode): how many slices, 4, 8, 12 or 16 */
+        void SetSliceCount(int n)
+        {
+            count_ = n < 4 ? 4 : n > kSlices ? kSlices : n - n % 4;
+        }
+        int SliceCount() const { return count_; }
 
         /** a key whose slice is sounding */
         bool Playing(int key) const
@@ -179,6 +187,8 @@ namespace chompi
             if (n < 0 || n > 24 || kWhite[n % 12] < 0)
                 return -1;
             const int w = kWhite[n % 12] + 7 * (n / 12); // 0..14
+            if (count_ < kSlices) // fewer slices: the lowest white keys
+                return w < count_ ? w : -1;
             if (w < 14)
                 return w;
             toggle_ = !toggle_;
@@ -197,7 +207,7 @@ namespace chompi
             }
             const size_t w0 = size_t(a * float(frames_));
             const size_t w1 = size_t(b * float(frames_));
-            len   = (w1 - w0) / kSlices;
+            len   = (w1 - w0) / size_t(count_);
             first = w0 + size_t(s) * len;
             if (len < 1)
                 len = 1;
@@ -209,6 +219,7 @@ namespace chompi
         float    sr_, speed_, vol_, vol_target_, start_, end_;
         bool     toggle_;
         uint32_t clock_;
+        int      count_;
     };
 
 } // namespace chompi

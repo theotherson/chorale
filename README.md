@@ -26,7 +26,7 @@ function: hold the Chompi key and turn.
 | 2 | harmony **attack**, 2 ms…500 ms | **input threshold**, −70…−20 dB (default −50; fully left: off) | filter envelope **attack**, 1 ms…2 s | filter **cutoff**, 40 Hz…16 kHz |
 | 3 | harmony **release**, 20 ms…3 s; fully right: never fade | **freeze threshold**, −60…−5 dB | filter envelope **decay**, 10 ms…5 s | filter **resonance** |
 | 4 | four pages: TEMPO's **delay/reverb** (left: random delay; centre: off; right: reverb delay) · its **mix** · **bitcrush** · **doubler** | randomness · feedback · output compression · warble | | |
-| 5 | looper, as in TAPE | | | |
+| 5 (wheel) | **tempo**; held while turning: the **rate** (TEMPO's divisions); click: **latch** | **rest pattern**; click: **tap tempo** | | |
 | 6 | **output volume** | **spread**: voices alternately left and right | **dry/wet**: left only your voice, centre both (default), right only the harmonies | **input gain** |
 
 **Chompi key + press:**
@@ -114,6 +114,24 @@ voice and the harmonies, before the effects and looper. Each time a harmony note
 a stacked note, each step of a strum, a new phrase through the input threshold), the cutoff
 sweeps up to fully open and back down.
 
+## Sequencer
+
+After TEMPO's: **play** starts and stops it. While it runs, the keys you hold (or have latched)
+are played one per step, on TEMPO's clock, as slices in slice mode or as harmonies (a note, the
+stack on it, or in chord mode a chord) otherwise; each sounds for 60% of its step. The sounding
+step lights white, the other keys in the sequence red (harmonies) or yellow (slices).
+
+- **Wheel:** turn for the tempo; hold it and turn for the rate; click for **latch**: the keys you
+  hold stay in after you let go, so your hands are free (the next key pressed after letting go
+  of all starts a new set). Chompi key + click taps the tempo. The wheel's lights show the steps.
+- **Chompi key + play:** the pattern mode: sequence (the order you pressed the keys), arp up,
+  arp down, arp up and down, random (play key: gold, amber, coral, rose, warm white).
+- **Chompi key + turn the wheel:** the rest pattern, TEMPO's five (none, then more gaps).
+- **Loop button:** records the loop, as before (the slices' material). **Chompi key + loop**
+  plays or stops the loop itself.
+
+TEMPO's granular delay follows the same clock.
+
 ## Slice mode (vocal chops)
 
 TEMPO's slice engine, on the looper: record a loop as usual, then hold the Chompi key and press
@@ -131,7 +149,8 @@ In slice mode knobs 1-3 are TEMPO's slice controls, kept apart from the harmony 
 | 2 | **start** of the sliced part of the loop | slice **attack**, 1 ms…1 s |
 | 3 | **end** of the sliced part | slice **release**, 5 ms…2 s |
 
-Chompi key + press knob 1-3 resets that knob's slice settings.
+Chompi key + knob 2 (page 1) sets how many slices: 4, 8, 12 or 16 (fewer slices use the lowest
+white keys). Chompi key + press knob 1-3 resets that knob's slice settings.
 
 ## Input and resample
 
