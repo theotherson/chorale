@@ -409,21 +409,22 @@ namespace chompi
         float Glide() const { return glide_v_; }
 
         /** menu + knob 2, page 1: onset threshold. 0 = gate off (always
-         *  open), else -70 .. -20 dB of the harmonizer input */
+         *  open), else -48 .. -8 dB of the harmonizer input (the low end sits
+         *  just over the CHOMPI's own input noise) */
         void SetGate(float v)
         {
             gate_v_      = v;
-            gate_thresh_ = v <= 0.f ? 0.f : powf(10.f, (-70.f + 50.f * v) / 20.f);
+            gate_thresh_ = v <= 0.f ? 0.f : powf(10.f, (-48.f + 40.f * v) / 20.f);
             gate_close_  = gate_thresh_ * .5f; // closes 6 dB under
         }
         float Gate() const { return gate_v_; }
 
         /** menu + knob 3, page 1: freeze threshold. 0 = freeze off (and
-         *  back to live), else -60 .. -5 dB of the harmonizer input */
+         *  back to live), else -45 .. -5 dB of the harmonizer input */
         void SetFreeze(float v)
         {
             freeze_v_      = v;
-            freeze_thresh_ = v <= 0.f ? 0.f : powf(10.f, (-60.f + 55.f * v) / 20.f);
+            freeze_thresh_ = v <= 0.f ? 0.f : powf(10.f, (-45.f + 40.f * v) / 20.f);
             if (v <= 0.f)
                 frozen_ = capturing_ = false;
         }
