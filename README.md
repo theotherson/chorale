@@ -24,7 +24,7 @@ function: hold the Chompi key and turn.
 |---|---|---|---|---|
 | 1 | notes mode: **stack interval** (centre: none; right: 3rd, 4th, 5th, 6th, octave above; left: the same below) · chord mode: **chord type** | notes mode: **how many** stacked notes (1–6, default 2) · chord mode: **voicing** (close, 1st, 2nd, 3rd inversion, open) | **strum**: centre all at once; right upward, left downward; further out, longer gap (up to 500 ms) | **glide** |
 | 2 | **input threshold**, −48…−8 dB (default −32; fully left: off); its ring is live | harmony **attack**, 2 ms…500 ms | filter **cutoff**, 40 Hz…16 kHz (fully open: off) | filter envelope **attack**, 1 ms…2 s |
-| 3 | **freeze threshold**, −45…−5 dB (fully left: off); its ring is live | harmony **release**, 20 ms…3 s; fully right: never fade | filter **resonance** | filter envelope **decay**, 10 ms…5 s |
+| 3 | **freeze threshold**, −45…−5 dB (fully left: off); its ring is live | harmony **release**, 20 ms…3 s (default ≈ 0.25 s); fully right: never fade, ring red | filter **resonance** | filter envelope **decay**, 10 ms…5 s (default ≈ 0.2 s) |
 | 4 | four pages: TEMPO's **delay/reverb** (left: random delay; centre: off; right: reverb delay) · its **mix** · **bitcrush** · **doubler** | randomness · feedback · output compression · warble | | |
 | 5 (wheel) | **tempo**; held while turning: the **rate** (TEMPO's divisions); click: **latch** | **rest pattern**; click: **tap tempo** | | |
 | 6 | **output volume** | **spread**: voices alternately left and right | **dry/wet**: left only your voice, centre both (default), right only the harmonies | **input gain** |

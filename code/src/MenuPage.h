@@ -203,8 +203,10 @@ namespace chompi
                     SetPthLedFloat(2, c[0] * lvl, c[1] * lvl, c[2] * lvl);
                 }
 
-                {   // CHORALE: knob 3: release deep orange / filter decay blue
-                    const float *c   = knob_page[2] == 0 ? deep_orange : blue;
+                {   // CHORALE: knob 3: release deep orange (red when it never
+                    // fades) / filter decay blue
+                    const bool   inf = knob_page[2] == 0 && amp_release_ >= .99f;
+                    const float *c   = inf ? red : knob_page[2] == 0 ? deep_orange : blue;
                     const float  v   = knob_page[2] == 0 ? amp_release_ : f_decay_;
                     const float  lvl = .15f + .85f * v;
                     SetPthLedFloat(3, c[0] * lvl, c[1] * lvl, c[2] * lvl);
